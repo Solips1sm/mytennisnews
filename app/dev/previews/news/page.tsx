@@ -1,3 +1,4 @@
+import { notFound } from 'next/navigation'
 import { buildDigest } from '@/lib/digest'
 import { Button } from '@/ui/button'
 import { prisma } from '@/lib/prisma'
@@ -8,12 +9,7 @@ export const revalidate = 0
 export default async function DigestPreviewPage() {
   const allowed = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true'
   if (!allowed) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10">
-        <h1 className="text-2xl font-bold">Previews disabled</h1>
-        <p className="text-muted-foreground">Set NEXT_PUBLIC_PREVIEW_MODE=true to enable.</p>
-      </div>
-    )
+    notFound()
   }
   const daily = await buildDigest('daily')
   const weekly = await buildDigest('weekly')

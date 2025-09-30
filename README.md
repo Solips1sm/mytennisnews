@@ -48,6 +48,8 @@ npm install
 
 2) Environment
 - Create `.env` from `.env.example` and fill: `DATABASE_URL`, `SANITY_PROJECT_ID`, `SANITY_DATASET`, `SANITY_API_READ_TOKEN`, `SANITY_API_WRITE_TOKEN`
+- Leave `NEXT_PUBLIC_PREVIEW_MODE=false` in production; rely on `/api/preview` only when an editor explicitly enables preview.
+- Keep `DRY_RUN=true` and the ingestion debug flags off by default. Flip them per-command when you need destructive behaviour (for example, `DRY_RUN=false npm run cleanup:drafts`).
 
 3) DB migrate
 ```pwsh
@@ -76,6 +78,48 @@ Then ensure schemas for `article`, `source`, `tag` are present (already added in
 ```pwsh
 pnpm dev
 ```
+
+## Production configuration checklist
+
+### Sanity (content store)
+- **Dataset:** Use a dedicated `production` dataset. Keep any experimental data in a separate `staging` dataset.
+- **API tokens:**
+	- Create a "Editor" (write) token for ingestion/cron scripts → map to `SANITY_API_WRITE_TOKEN`.
+	- Create a "Viewer" token for Next.js preview routes → map to `SANITY_API_READ_TOKEN`.
+	- Store both as server-side secrets (Vercel Production env). Never copy them into `cms/.env`.
+- **CORS / Allowed origins:** Add `https://mytennisnews.com`, `https://www.mytennisnews.com`, and the Vercel preview domains under *Settings → API → CORS Origins*.
+- **Studio deployment:**
+	- Either run Sanity Studio as part of the repo (`npm run studio:build` + deploy) or host it on Sanity’s managed studio. The `cms/` folder is already scaffolded.
+	- Remove any local-only overrides (dev server host/port) before deploying the Studio.
+- **Preview + publishing rules:**
+	- Published articles live in Sanity and surface through the `*_PUBLISHED` GROQ queries; draft content only appears when preview mode is explicitly enabled.
+	- Make sure editors double-check the `publishedAt` field—queries filter on it for digests and pagination.
+
+### Supabase / Postgres (non-content data)
+- **Project:** Create a Supabase project (or managed Postgres instance). Copy the pooled connection string (`?pgbouncer=true`) into `DATABASE_URL` for serverless-friendly connections. Keep `DIRECT_URL` (if used) for migrations only.
+- **Prisma migrations:**
+	```pwsh
+	npx prisma migrate deploy
+	```
+	Run after each schema change; commit migrations so production stays in lockstep.
+- **Connection settings:**
+	- If you enable PgBouncer, set `PGSSLMODE=require` / `sslmode=require`.
+	- Restrict database user permissions to the `Subscription` and `IngestedItem` tables.
+- **Row Level Security (optional):** Enable RLS and add policies if you later expose Supabase directly.
+- **Secrets:** Store DB credentials only in Vercel’s Production env (`DATABASE_URL`).
+
+### Application toggles & housekeeping
+- `NEXT_PUBLIC_APP_URL` → set to `https://mytennisnews.com` in Production.
+- `NEXT_PUBLIC_PREVIEW_MODE` → keep `false`; preview mode is entered via `/api/preview` when needed.
+- `DRY_RUN` → leave `true` globally; set to `false` only for one-off destructive scripts (`cleanup:drafts`, `purge:ledger`).
+- `INGEST_DEBUG`, `INGEST_DEBUG_SAVE_HTML` → keep `false` in Production; enable temporarily when troubleshooting extractor output locally.
+- `OPENAI_API_KEY`, `RESEND_API_KEY`, and other provider secrets → store in Vercel env, never in the repo.
+- Ensure Vercel Cron (or your chosen scheduler) runs with the Production env vars so ingestion, AI backfill, and publishing use the right dataset and database.
+
+### Data exposure guardrails
+- Public site and API handlers already switch to published-only GROQ queries whenever preview mode is disabled, so no drafts leak to end users.
+- `lib/digest.ts` and `scripts/send-digest.ts` use `ARTICLES_LIST_PUBLISHED`; weekly/daily digests only include published articles. Leaving preview off in Production protects this path automatically.
+- If you add new queries or API routes, prefer the `*_PUBLISHED` variants and pass `perspective: "published"` (or avoid `drafts` altogether) unless explicitly building editorial tooling.
 
 ## Add & Preview Articles
 - Add content: Open Sanity Studio (`cms/`) and create an `article`.
@@ -233,11 +277,13 @@ Alternatively, delete drafts directly in Sanity Studio from the Documents pane.
 
 ## Production Cron Workflow
 
-For a dedicated production worker, use the bundled cycle script to orchestrate ingestion, AI generation, and publishing:
+For a dedicated production worker, use the bundled cycle script or the hosted API route to orchestrate ingestion, AI generation, and publishing:
 
 ```pwsh
 npm run cron:cycle
 ```
+
+Hosted endpoint (guarded by `CRON_SECRET`): `POST https://<your-domain>/api/cron-cycle`
 
 Each run performs three phases:
 
@@ -247,6 +293,7 @@ Each run performs three phases:
 
 Environment toggles:
 
+- `CRON_SECRET` — required when calling `/api/cron-cycle` (send as `Authorization: Bearer <CRON_SECRET>` or `?secret=` query string).
 - `CRON_FEEDS` — comma-separated preset keys (default `espn,atp,wta`).
 - `CRON_AI_CONCURRENCY` — max concurrent AI generations (default `2`).
 - Standard Sanity tokens and `OPENAI_API_KEY` must be available in the environment.
@@ -255,6 +302,18 @@ Example crontab entry (every 30 minutes):
 
 ```cron
 */30 * * * * cd /srv/mytennisnews && /usr/bin/env NODE_ENV=production npm run cron:cycle >> /var/log/mytennisnews-cron.log 2>&1
+```
+
+Example Vercel Scheduled Function (every 30 minutes):
+
+```json
+{
+	"schedule": "*/30 * * * *",
+	"endpoint": "https://<your-domain>/api/cron-cycle",
+	"headers": {
+		"Authorization": "Bearer <CRON_SECRET>"
+	}
+}
 ```
 
 The public site already uses the `*_PUBLISHED` GROQ queries whenever `NEXT_PUBLIC_PREVIEW_MODE` is false, so only published articles surface in production.
