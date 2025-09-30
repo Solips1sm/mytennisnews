@@ -41,7 +41,6 @@
     "react-dom": "18.3.1",
     "react-is": "^18.3.1",
   "rss-parser": "^3.13.0",
-  "p-limit": "^5.0.0",
     "sanitize-html": "^2.13.0",
     "styled-components": "^6.1.19",
     "tailwind-merge": "^2.4.0",

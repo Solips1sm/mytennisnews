@@ -1,9 +1,9 @@
 import crypto from 'node:crypto'
-import pLimit from 'p-limit'
 import { serverClient } from '../sanity'
 import { OpenAIPipeline } from '../integrations/ai/openai'
 import { resolveVariantTargetCount } from '../integrations/ai'
 import { buildPromptArtifacts } from '../integrations/ai/prompt-context'
+import { createLimiter } from '../utils/concurrency'
 
 export interface ArticleLite {
   _id: string
@@ -124,7 +124,7 @@ export async function backfillMissingAIDrafts(options: BackfillOptions = {}): Pr
   }
   let processed = 0
   let failures = 0
-  const limiter = pLimit(concurrency)
+  const limiter = createLimiter(concurrency)
   const tasks = targets.map((doc) =>
     limiter(async () => {
       const label = `${doc._id}`

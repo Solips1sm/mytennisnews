@@ -1,7 +1,7 @@
 import 'dotenv/config'
 import { serverClient } from '../lib/sanity'
-import pLimit from 'p-limit'
 import { preserveNumbersInHtml, htmlToPlainText } from '../lib/integrations/util/number-preserver'
+import { createLimiter } from '../lib/utils/concurrency'
 
 type Doc = { _id: string; _type: string; slug?: { current: string }; canonicalUrl?: string; externalHtml?: string | null }
 
@@ -12,7 +12,7 @@ async function fetchBatch(cursor?: string) {
 }
 
 async function main() {
-  const limit = pLimit(4)
+  const limit = createLimiter(4)
   let repaired = 0
   const docs = await fetchBatch()
   if (!docs.length) {

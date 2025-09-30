@@ -15,6 +15,14 @@ const nextConfig = {
       'groq',
     ],
   },
+  webpack: (config) => {
+    config.resolve = config.resolve ?? {}
+    config.resolve.alias = config.resolve.alias ?? {}
+    if (!config.resolve.alias['#async_hooks']) {
+      config.resolve.alias['#async_hooks'] = 'node:async_hooks'
+    }
+    return config
+  },
 }
 
 module.exports = nextConfig
