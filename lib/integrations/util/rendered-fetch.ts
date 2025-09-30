@@ -7,7 +7,6 @@ export async function fetchRenderedHtml(
   let browser: any
   try {
     // Dynamic import so the rest of the codebase doesn't require puppeteer in all environments
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const puppeteer = (await import('puppeteer')).default
     browser = await puppeteer.launch({ headless: true })
     const page = await browser.newPage()
