@@ -24,7 +24,10 @@ async function handle(request: Request) {
     if (!authorize(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    const summary = await runCronCycle({ logger: console })
+    const chainDepthHeader = request.headers.get('x-cron-chain')
+    const parsedChainDepth = chainDepthHeader ? parseInt(chainDepthHeader, 10) : 0
+    const chainDepth = Number.isFinite(parsedChainDepth) && parsedChainDepth >= 0 ? parsedChainDepth : 0
+    const summary = await runCronCycle({ logger: console, chainDepth })
     return NextResponse.json({ ok: true, summary })
   } catch (error: any) {
     console.error('[api/cron-cycle] failed', error)

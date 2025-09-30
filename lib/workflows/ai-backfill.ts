@@ -34,6 +34,12 @@ export async function fetchTargets(limit?: number): Promise<ArticleLite[]> {
   return items
 }
 
+export async function countTargets(): Promise<number> {
+  const q = 'count(*[_type=="article" && (!defined(aiFinal.body) || aiFinal.body == "")])'
+  const count = await serverClient.fetch<number>(q)
+  return typeof count === 'number' ? count : 0
+}
+
 export function createPipeline(apiKey: string) {
   return new OpenAIPipeline(apiKey)
 }
@@ -90,10 +96,12 @@ export async function runPipelineOnArticle(doc: ArticleLite, ai: OpenAIPipeline,
 }
 
 export type BackfillSummary = {
+  backlogBefore: number
   total: number
   processed: number
   failures: number
   durationMs: number
+  remaining: number
 }
 
 export type BackfillOptions = {
@@ -111,16 +119,35 @@ export async function backfillMissingAIDrafts(options: BackfillOptions = {}): Pr
   if (!apiKey) throw new Error('OPENAI_API_KEY missing')
   const limit = options.limit
   const concurrency = Math.max(1, options.concurrency ?? 1)
+  const backlogBefore = await countTargets()
+  logger.log(`[AI] Backfill backlog: ${backlogBefore}`)
+  if (!backlogBefore) {
+    return { backlogBefore, total: 0, processed: 0, failures: 0, durationMs: Date.now() - started, remaining: 0 }
+  }
   const ai = createPipeline(apiKey)
-  const targets = await fetchTargets(limit)
+  const targets = await fetchTargets(limit && limit > 0 ? limit : undefined)
   const total = targets.length
   logger.log(`[AI] Backfill targets: ${total}`)
   if (!total) {
-    return { total, processed: 0, failures: 0, durationMs: Date.now() - started }
+    return {
+      backlogBefore,
+      total,
+      processed: 0,
+      failures: 0,
+      durationMs: Date.now() - started,
+      remaining: backlogBefore,
+    }
   }
   if (options.dryRun) {
     targets.forEach((t) => logger.log('[AI] Would process:', t._id, t.title))
-    return { total, processed: 0, failures: 0, durationMs: Date.now() - started }
+    return {
+      backlogBefore,
+      total,
+      processed: 0,
+      failures: 0,
+      durationMs: Date.now() - started,
+      remaining: backlogBefore,
+    }
   }
   let processed = 0
   let failures = 0
@@ -142,5 +169,6 @@ export async function backfillMissingAIDrafts(options: BackfillOptions = {}): Pr
   await Promise.all(tasks)
   const durationMs = Date.now() - started
   logger.log(`Backfill complete. processed=${processed} failures=${failures} elapsed=${(durationMs / 1000).toFixed(1)}s`)
-  return { total, processed, failures, durationMs }
+  const remaining = Math.max(0, backlogBefore - processed)
+  return { backlogBefore, total, processed, failures, durationMs, remaining }
 }
