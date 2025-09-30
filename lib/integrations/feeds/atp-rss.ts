@@ -2,6 +2,7 @@ import Parser from 'rss-parser'
 import type { FeedProvider, NormalizedItem } from './index'
 import { extractArticle } from '../extractors/article'
 import { isAllowedToExtract } from '../util/allowlist'
+import { detectChallenge } from '../util/challenge-detector'
 
 // Lightweight HTML to text conversion
 function htmlToText(html: string): string {
@@ -90,7 +91,7 @@ export class AtpRssProvider implements FeedProvider {
         const d = new Date(pubDate)
         if (+d <= +since) continue
       }
-      let rawDesc = (it as any).content || it['content:encoded'] || it.description || ''
+  let rawDesc = (it as any).content || it['content:encoded'] || it.description || ''
       rawDesc = stripPlaceholders(rawDesc)
       rawDesc = normalizeRelativeAssets(rawDesc, this.origin)
       // Basic pruning of social embeds / scripts left behind
@@ -109,11 +110,19 @@ export class AtpRssProvider implements FeedProvider {
         source: { name: this.name, url: this.feedUrl },
         tags: categories,
       }
+      const challengeFromFeed = detectChallenge(rawDesc)
+      if (challengeFromFeed) {
+        normalized.challenge = challengeFromFeed
+      }
       let usedExtractor = false
       if (process.env.INGEST_FETCH_ARTICLE === 'true' && isAllowedToExtract(link)) {
         const extracted = await extractArticle(link)
         if (extracted) {
           usedExtractor = true
+          if (extracted.challenge) {
+            normalized.challenge = extracted.challenge
+            normalized.warnings = [...(normalized.warnings || []), `extractor:${extracted.challenge.type}`]
+          }
           normalized.bodyHtml = extracted.bodyHtml || undefined
           normalized.bodyText = extracted.bodyText || undefined
           normalized.authors = extracted.authors

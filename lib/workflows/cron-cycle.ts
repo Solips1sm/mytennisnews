@@ -187,6 +187,12 @@ export async function runCronCycle(options: CronCycleOptions = {}): Promise<Cron
     logger.warn('[cron] No valid feeds resolved; skipping ingestion step')
   } else {
     ingestionSummary = await ingestFeeds(feeds, { logger })
+    if ((ingestionSummary?.totals?.blocked ?? 0) > 0) {
+      logger.warn(
+        { blockedItems: ingestionSummary?.totals?.blocked },
+        '[cron] ingestion blocked items detected'
+      )
+    }
   }
 
   const skipBackfill = options.skipBackfill ?? resolveSkipBackfillFromEnv() ?? false

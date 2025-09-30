@@ -1,4 +1,5 @@
 import { JSDOM } from 'jsdom'
+import { detectChallenge, type ChallengeDetection } from '../util/challenge-detector'
 
 export type ESPNExtracted = {
   title?: string
@@ -18,7 +19,9 @@ export type ESPNExtracted = {
     images?: number
     videos?: number
     htmlSavedPath?: string
+    note?: string
   }
+  challenge?: ChallengeDetection
 }
 
 export async function extractESPN(url: string): Promise<ESPNExtracted | null> {
@@ -26,6 +29,19 @@ export async function extractESPN(url: string): Promise<ESPNExtracted | null> {
     const res = await fetch(url, { headers: { 'User-Agent': 'MyTennisNewsBot/1.0' } })
     if (!res.ok) return null
     const html = await res.text()
+    const challenge = detectChallenge(html)
+    if (challenge) {
+      console.warn('[extract:espn] challenge detected', challenge, { url, status: res.status })
+      return {
+        challenge,
+        _debug: {
+          extractor: 'espn',
+          status: res.status,
+          htmlLength: html.length,
+          note: `challenge:${challenge.type}`,
+        },
+      }
+    }
     const dom = new JSDOM(html)
     const doc = dom.window.document
 
@@ -53,7 +69,7 @@ export async function extractESPN(url: string): Promise<ESPNExtracted | null> {
       .map((el) => el.textContent?.trim())
       .filter(Boolean) as string[]
     const timestampText = article.querySelector('.timestamp')?.textContent?.trim() || undefined
-  const bodyContainer = article.querySelector('.article-body') || article
+    const bodyContainer = article.querySelector('.article-body') || article
     const paragraphs = Array.from(bodyContainer.querySelectorAll('p'))
     const bodyText = paragraphs.map((p) => p.textContent?.trim()).filter(Boolean).join('\n\n') || undefined
     const bodyHtml = bodyContainer.innerHTML || undefined

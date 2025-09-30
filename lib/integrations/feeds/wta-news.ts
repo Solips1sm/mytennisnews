@@ -1,6 +1,7 @@
 import { JSDOM } from 'jsdom'
 import type { FeedProvider, NormalizedItem } from './index'
 import { extractWTA } from '../extractors/wta'
+import { detectChallenge } from '../util/challenge-detector'
 
 const BASE_URL = 'https://www.wtatennis.com'
 const LISTING_SECTIONS: Array<{ label: string; url: string }> = [
@@ -58,6 +59,11 @@ async function fetchListing(sectionUrl: string): Promise<ListingItem[]> {
   })
   if (!res.ok) return []
   const html = await res.text()
+  const challenge = detectChallenge(html)
+  if (challenge) {
+    console.warn('[wta-news] challenge detected on listing', challenge, { url: sectionUrl })
+    return []
+  }
   const dom = new JSDOM(html)
   const doc = dom.window.document
 
@@ -119,7 +125,7 @@ export class WtaNewsProvider implements FeedProvider {
 
     const results: NormalizedItem[] = []
     for (const { item, sectionLabel } of flattened) {
-      const extracted = await extractWTA(item.url)
+  const extracted = await extractWTA(item.url)
       const publishedIso = extracted?.publishedAtIso || parseRelativeDate(item.publishedLabel)
 
       if (since && publishedIso) {
@@ -144,6 +150,11 @@ export class WtaNewsProvider implements FeedProvider {
         excerpt: clampExcerpt(extracted?.excerpt || item.excerpt || extracted?.bodyText || undefined),
         source: { name: this.name, url: this.sourceUrl },
         tags: allTags.length ? allTags : undefined,
+      }
+
+      if (extracted?.challenge) {
+        normalized.challenge = extracted.challenge
+        normalized.warnings = [...(normalized.warnings || []), `extractor:${extracted.challenge.type}`]
       }
 
       if (extracted?.bodyHtml) normalized.bodyHtml = extracted.bodyHtml

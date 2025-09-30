@@ -3,6 +3,7 @@ import { extractESPN } from './espn'
 import { extractATP } from './atp'
 import { extractWTA } from './wta'
 import { fetchRenderedHtml, shouldUseRenderedFetch } from '../util/rendered-fetch'
+import { detectChallenge, type ChallengeDetection } from '../util/challenge-detector'
 
 // Internal: version bump to invalidate stale build caches for extractor union
 export const __EXTRACTOR_VERSION__ = 3
@@ -26,6 +27,7 @@ export type ExtractedArticle = {
     htmlSavedPath?: string
     note?: string
   }
+  challenge?: ChallengeDetection
 }
 
 // NOTE: loosen return type to accommodate site-specific extractor variance
@@ -88,24 +90,63 @@ export async function extractArticle(url: string): Promise<ExtractedArticle | nu
       }
     }
     // Optional rendered fetch for dynamic sites (client-rendered digits)
+    const preferRendered = shouldUseRenderedFetch(host)
+    const attempts: Array<'rendered' | 'fetch'> = preferRendered ? ['rendered', 'fetch'] : ['fetch', 'rendered']
     let html: string | null = null
     let status: number | undefined
-    if (shouldUseRenderedFetch(host)) {
-      const r = await fetchRenderedHtml(url, {
-        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        waitSelectors: ['article', 'main', 'time'],
-        timeoutMs: 35000,
-      })
-      html = r.html
-      status = r.status
+    let loader: 'rendered' | 'fetch' | undefined
+    let lastChallenge: ChallengeDetection | null = null
+    for (const attempt of attempts) {
+      if (attempt === 'rendered') {
+        const r = await fetchRenderedHtml(url, {
+          userAgent:
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          waitSelectors: ['article', 'main', 'time'],
+          timeoutMs: 35000,
+        })
+        if (r.html) {
+          const challenge = detectChallenge(r.html)
+          if (challenge) {
+            console.warn('[extractor] challenge via rendered fetch', challenge, { url, status: r.status })
+            lastChallenge = challenge
+            continue
+          }
+          html = r.html
+          status = r.status
+          loader = 'rendered'
+          break
+        }
+      } else {
+        const res = await fetch(url, { headers: { 'User-Agent': 'MyTennisNewsBot/1.0' } })
+        if (!res.ok) continue
+        const text = await res.text()
+        if (!text) continue
+        const challenge = detectChallenge(text)
+        if (challenge) {
+          console.warn('[extractor] challenge via direct fetch', challenge, { url, status: res.status })
+          lastChallenge = challenge
+          continue
+        }
+        html = text
+        status = res.status
+        loader = 'fetch'
+        break
+      }
     }
     if (!html) {
-      const res = await fetch(url, { headers: { 'User-Agent': 'MyTennisNewsBot/1.0' } })
-      if (!res.ok) return null
-      status = res.status
-      html = await res.text()
+      if (lastChallenge) {
+        return {
+          challenge: lastChallenge,
+          _debug: {
+            extractor: 'generic',
+            status,
+            htmlLength: 0,
+            note: `challenge:${lastChallenge.type}`,
+          },
+        }
+      }
+      return null
     }
-    if (!html) return null
     const dom = new JSDOM(html)
     const doc = dom.window.document
 

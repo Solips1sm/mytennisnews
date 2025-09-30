@@ -3,7 +3,7 @@ import OpenAI from 'openai'
 import { JSDOM } from 'jsdom'
 import { AIPipelineProvider, DraftVariant, LinkReference, MediaReference } from './index'
 
-type PipelineUsageEvent = {
+export type PipelineUsageEvent = {
   id: string
   label: string
   model: string
@@ -15,7 +15,7 @@ type PipelineUsageEvent = {
   totalTokens: number
 }
 
-type PipelineUsageSummary = {
+export type PipelineUsageSummary = {
   totals: {
     requests: number
     promptTokens: number
@@ -322,7 +322,7 @@ export class OpenAIPipeline implements AIPipelineProvider {
   private usageEvents: PipelineUsageEvent[] = []
   private onUsage?: (event: PipelineUsageEvent) => void
 
-  constructor(apiKey: string, model = process.env.AI_MODEL || 'gpt-4o-mini', options?: { onUsage?: (event: PipelineUsageEvent) => void }) {
+  constructor(apiKey: string, model = process.env.AI_MODEL || 'gpt-5-mini', options?: { onUsage?: (event: PipelineUsageEvent) => void }) {
     this.client = new OpenAI({ apiKey })
     this.model = model
     this.onUsage = options?.onUsage

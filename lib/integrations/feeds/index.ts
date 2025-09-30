@@ -1,3 +1,5 @@
+import type { ChallengeDetection } from '../util/challenge-detector'
+
 export interface FeedProvider {
   readonly name: string
   fetchNewItems(sinceIso?: string): Promise<NormalizedItem[]>
@@ -22,4 +24,6 @@ export type NormalizedItem = {
   links?: string[]
   videos?: Array<{ title?: string; url?: string; embedUrl?: string; thumbnail?: string }>
   credits?: string
+  challenge?: ChallengeDetection
+  warnings?: string[]
 }

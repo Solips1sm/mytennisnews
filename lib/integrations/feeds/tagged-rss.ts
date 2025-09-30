@@ -2,6 +2,7 @@ import Parser from 'rss-parser'
 import type { FeedProvider, NormalizedItem } from './index'
 import { extractArticle } from '../../integrations/extractors/article'
 import { isAllowedToExtract } from '../../integrations/util/allowlist'
+import { detectChallenge } from '../util/challenge-detector'
 
 // Similar to RssProvider but also maps <category> elements to NormalizedItem.tags
 export class TaggedRssProvider implements FeedProvider {
@@ -41,9 +42,18 @@ export class TaggedRssProvider implements FeedProvider {
         source: { name: this.name, url: this.feedUrl },
         tags,
       }
+      const rawContent = (it as any)['content:encoded'] || (it as any).content || ''
+      const challengeFromFeed = detectChallenge(rawContent)
+      if (challengeFromFeed) {
+        normalized.challenge = challengeFromFeed
+      }
       if (process.env.INGEST_FETCH_ARTICLE === 'true' && isAllowedToExtract(link)) {
         const extracted = await extractArticle(link)
         if (extracted) {
+          if (extracted.challenge) {
+            normalized.challenge = extracted.challenge
+            normalized.warnings = [...(normalized.warnings || []), `extractor:${extracted.challenge.type}`]
+          }
           normalized.bodyHtml = extracted.bodyHtml
           normalized.bodyText = extracted.bodyText
           normalized.authors = extracted.authors

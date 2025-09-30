@@ -215,6 +215,18 @@ Optional enrichment: fetch canonical article pages to extract main content and i
 $env:INGEST_FETCH_ARTICLE = "true"; npm run ingest
 ```
 
+For sources that hide content behind client-side rendering, enable the rendered fetch fallback. Allow specific hosts or flip the global switch, and choose the driver (`puppeteer` default or `real-browser` for Cloudflare-heavy pages):
+
+```pwsh
+$env:INGEST_RENDERED = 'true'                      # enable for all domains
+$env:INGEST_RENDERED_HOSTS = 'espn.com,wta.com'     # or allowlist specific hosts
+$env:INGEST_RENDERED_DRIVER = 'real-browser'       # use puppeteer-real-browser session
+$env:INGEST_REAL_BROWSER_HEADLESS = 'shell'        # shell | true | false
+$env:INGEST_REAL_BROWSER_CHROME_PATH = 'C:/chrome/chrome.exe'  # optional
+```
+
+If the real-browser driver fails to extract HTML (e.g. no headless Chrome available), the code automatically falls back to standard Puppeteer.
+
 Legal/compliance: respect robots.txt/ToS and only store short excerpts in CMS. Use the allowlist to limit domains for extraction:
 
 ```pwsh
@@ -274,6 +286,19 @@ $env:DRY_RUN = "false"; $env:CLEANUP_TAG = "ESPN"; npm run cleanup:drafts
 ```
 
 Alternatively, delete drafts directly in Sanity Studio from the Documents pane.
+
+Need to purge Cloudflare "Just a moment" artifacts that slipped into drafts or published entries? Run the specialised cleanup script (dry-run by default):
+
+```pwsh
+# list affected drafts/published docs containing Cloudflare challenge HTML
+npm run cleanup:cloudflare
+
+# apply deletions (requires DRY_RUN=false); optionally include published docs
+$env:DRY_RUN = 'false'; npm run cleanup:cloudflare -- --include-published
+# to delete published docs outright instead of scrubbing them, add --delete-published
+```
+
+The script also clears matching entries in the Prisma ingestion ledger so future runs can re-ingest the cleaned URLs.
 
 ## Production Cron Workflow
 

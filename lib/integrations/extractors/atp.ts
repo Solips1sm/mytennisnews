@@ -1,4 +1,5 @@
 import { JSDOM } from 'jsdom'
+import { detectChallenge, type ChallengeDetection } from '../util/challenge-detector'
 
 type LoaderSource = 'fetch' | 'puppeteer'
 
@@ -25,6 +26,7 @@ export type ATPExtracted = {
     htmlSavedPath?: string
     note?: string
   }
+  challenge?: ChallengeDetection
 }
 
 async function loadViaFetch(url: string): Promise<{ html: string; status: number } | null> {
@@ -77,30 +79,64 @@ export async function extractATP(url: string): Promise<ATPExtracted | null> {
     let loader: LoaderSource = headlessPrimary ? 'puppeteer' : 'fetch'
     let status: number | undefined
     let html: string | null = null
+    let lastChallenge: ChallengeDetection | null = null
 
     if (headlessPrimary) {
       const headlessHtml = await loadViaPuppeteer(url)
-      if (headlessHtml) html = headlessHtml
+      if (headlessHtml) {
+        const challenge = detectChallenge(headlessHtml)
+        if (challenge) {
+          console.warn('[extract:atp] challenge via puppeteer', challenge, { url })
+          lastChallenge = challenge
+        } else {
+          html = headlessHtml
+        }
+      }
     }
 
     if (!html) {
       const fetched = await loadViaFetch(url)
       if (fetched) {
-        html = fetched.html
         status = fetched.status
-        loader = 'fetch'
+        const challenge = detectChallenge(fetched.html)
+        if (challenge) {
+          console.warn('[extract:atp] challenge via fetch', challenge, { url, status })
+          lastChallenge = challenge
+        } else {
+          html = fetched.html
+          loader = 'fetch'
+        }
       }
     }
 
     if (!html && !headlessPrimary) {
       const headlessHtml = await loadViaPuppeteer(url)
       if (headlessHtml) {
-        html = headlessHtml
-        loader = 'puppeteer'
+        const challenge = detectChallenge(headlessHtml)
+        if (challenge) {
+          console.warn('[extract:atp] challenge via fallback puppeteer', challenge, { url })
+          lastChallenge = challenge
+        } else {
+          html = headlessHtml
+          loader = 'puppeteer'
+        }
       }
     }
 
-    if (!html) return null
+    if (!html) {
+      if (lastChallenge) {
+        return {
+          challenge: lastChallenge,
+          _debug: {
+            extractor: 'atp',
+            status,
+            loader,
+            note: `challenge:${lastChallenge.type}`,
+          },
+        }
+      }
+      return null
+    }
 
     let dom = new JSDOM(html)
     let doc = dom.window.document

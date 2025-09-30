@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import { prisma } from '../prisma'
 import { serverClient } from '../sanity'
 import type { FeedProvider, NormalizedItem } from '../integrations/feeds'
+import type { ChallengeDetection } from '../integrations/util/challenge-detector'
 import { RssProvider } from '../integrations/feeds/rss'
 import { TaggedRssProvider } from '../integrations/feeds/tagged-rss'
 import { AtpRssProvider } from '../integrations/feeds/atp-rss'
@@ -138,7 +139,24 @@ async function updateDraftFromItem(item: NormalizedItem, sourceId: string) {
   await serverClient.patch(draftId).set(patch).commit()
 }
 
-async function processItem(it: NormalizedItem, sourceKey: string, sourceId: string) {
+type ProcessItemResult = {
+  refreshed?: boolean
+  skipped?: boolean
+  blocked?: boolean
+  challenge?: ChallengeDetection
+}
+
+async function processItem(it: NormalizedItem, sourceKey: string, sourceId: string): Promise<ProcessItemResult> {
+  if (it.challenge) {
+    if (process.env.INGEST_DEBUG === 'true') {
+      console.warn('[ingest] challenge detected, skipping', {
+        url: it.url,
+        type: it.challenge.type,
+        indicator: it.challenge.indicator,
+      })
+    }
+    return { skipped: true, blocked: true, challenge: it.challenge }
+  }
   if (it.bodyHtml) {
     const fixed = preserveNumbersInHtml(it.bodyHtml)
     it.bodyHtml = fixed
@@ -180,11 +198,12 @@ export type FeedIngestReport = {
   created: number
   refreshed: number
   skipped: number
+  blocked: number
 }
 
 export type IngestSummary = {
   reports: FeedIngestReport[]
-  totals: { created: number; refreshed: number; skipped: number }
+  totals: { created: number; refreshed: number; skipped: number; blocked: number }
 }
 
 export const FEED_PRESETS: Record<string, FeedConfig> = {
@@ -225,6 +244,7 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
   let totalCreated = 0
   let totalSkipped = 0
   let totalRefreshed = 0
+  let totalBlocked = 0
   const reports: FeedIngestReport[] = []
   for (const cfg of feeds) {
     const provider = providerFor(cfg)
@@ -232,14 +252,25 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
     const items = await provider.fetchNewItems()
     if (!items.length) {
       logger.log(`[${cfg.name}] No items found`)
-      reports.push({ feed: cfg, items: 0, created: 0, refreshed: 0, skipped: 0 })
+      reports.push({ feed: cfg, items: 0, created: 0, refreshed: 0, skipped: 0, blocked: 0 })
       continue
     }
     const sourceId = await upsertSource(cfg.name, cfg.url)
     let created = 0
     let refreshed = 0
     let skipped = 0
+    let blocked = 0
     for (const it of items) {
+      if (it.challenge) {
+        blocked++
+        totalBlocked++
+        logger.warn(`[${cfg.name}] challenge detected`, {
+          url: it.url,
+          indicator: it.challenge.indicator,
+          type: it.challenge.type,
+        })
+        continue
+      }
       if (process.env.INGEST_DEBUG === 'true') {
         const why: string[] = []
         if (!it.bodyText) why.push('no bodyText')
@@ -255,6 +286,11 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
         })
       }
       const res = await processItem(it, SOURCE_KEY, sourceId)
+      if (res.blocked) {
+        blocked++
+        totalBlocked++
+        continue
+      }
       if ((res as any).refreshed) {
         refreshed++
         totalRefreshed++
@@ -266,9 +302,13 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
         totalCreated++
       }
     }
-    logger.log(`[${cfg.name}] processed=${items.length} created=${created} refreshed=${refreshed} skipped=${skipped}`)
-    reports.push({ feed: cfg, items: items.length, created, refreshed, skipped })
+    logger.log(
+      `[${cfg.name}] processed=${items.length} created=${created} refreshed=${refreshed} skipped=${skipped} blocked=${blocked}`
+    )
+    reports.push({ feed: cfg, items: items.length, created, refreshed, skipped, blocked })
   }
-  logger.log(`Ingestion complete. created=${totalCreated} refreshed=${totalRefreshed} skipped=${totalSkipped}`)
-  return { reports, totals: { created: totalCreated, refreshed: totalRefreshed, skipped: totalSkipped } }
+  logger.log(
+    `Ingestion complete. created=${totalCreated} refreshed=${totalRefreshed} skipped=${totalSkipped} blocked=${totalBlocked}`
+  )
+  return { reports, totals: { created: totalCreated, refreshed: totalRefreshed, skipped: totalSkipped, blocked: totalBlocked } }
 }

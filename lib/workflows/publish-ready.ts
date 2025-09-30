@@ -29,10 +29,17 @@ function sanitizePublishedDoc(draft: Record<string, any>, publishedId: string, p
   return doc
 }
 
+function hasPublishableAiBody(draft: Record<string, any>): boolean {
+  const value = draft.aiFinal?.body
+  if (!value) return false
+  if (typeof value === 'string') return value.trim().length > 0
+  return Boolean(value)
+}
+
 export async function publishReadyArticles(options: PublishOptions = {}): Promise<PublishSummary> {
   const logger = options.logger ?? console
   const drafts: Array<Record<string, any>> = await serverClient.fetch(
-    `*[_type == "article" && _id in path('drafts.**') && defined(aiFinal.body) && aiFinal.body != ""]{
+  `*[_type == "article" && _id in path('drafts.**') && defined(aiFinal.body) && !(coalesce(aiFinal.body, "") match "^[[:space:]]*$") && status != "published"]{
       _id,
       _type,
       title,
@@ -59,11 +66,6 @@ export async function publishReadyArticles(options: PublishOptions = {}): Promis
     return { totalCandidates, published: 0, skipped: 0, errors: 0 }
   }
 
-  if (options.dryRun) {
-    drafts.forEach((draft) => logger.log('[publish] Would publish', draft._id))
-    return { totalCandidates, published: 0, skipped: totalCandidates, errors: 0 }
-  }
-
   let published = 0
   let skipped = 0
   let errors = 0
@@ -72,6 +74,18 @@ export async function publishReadyArticles(options: PublishOptions = {}): Promis
     const draftId = draft._id as string
     const publishedId = draftId.replace(/^drafts\./, '')
     const slug = draft.slug?.current
+    const hasBody = hasPublishableAiBody(draft)
+    logger.log('[publish] evaluate', {
+      draftId,
+      slug,
+      status: draft.status,
+      hasAiBody: hasBody,
+    })
+    if (!hasBody) {
+      logger.warn('[publish] Skipping draft without usable AI body', draftId)
+      skipped++
+      continue
+    }
     if (!slug) {
       logger.warn('[publish] Skipping draft without slug', draftId)
       skipped++
@@ -80,10 +94,18 @@ export async function publishReadyArticles(options: PublishOptions = {}): Promis
     const publishedAt = draft.publishedAt || new Date().toISOString()
     const doc = sanitizePublishedDoc(draft, publishedId, publishedAt)
     try {
-      await serverClient.createOrReplace(doc)
-      await serverClient.patch(draftId).set({ status: 'published', publishedAt }).commit()
-      logger.log('[publish] Published', publishedId)
-      published++
+      if (options.dryRun) {
+        logger.log('[publish] Would publish', publishedId)
+        skipped++
+      } else {
+        await serverClient.createOrReplace(doc)
+        await serverClient.patch(draftId).set({ status: 'published', publishedAt }).commit()
+        logger.log('[publish] Published', publishedId, {
+          provider: draft.aiFinal?.provider,
+          model: draft.aiFinal?.model,
+        })
+        published++
+      }
     } catch (err: any) {
       logger.error('[publish] Failed to publish', draftId, err?.message || err)
       errors++

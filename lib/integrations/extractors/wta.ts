@@ -1,5 +1,6 @@
 import { JSDOM } from 'jsdom'
 import sanitizeHtml from 'sanitize-html'
+import { detectChallenge, type ChallengeDetection } from '../util/challenge-detector'
 
 type LoaderSource = 'fetch' | 'puppeteer'
 
@@ -30,6 +31,7 @@ export type WTAExtracted = {
     htmlSavedPath?: string
     note?: string
   }
+  challenge?: ChallengeDetection
 }
 
 const ORIGIN = 'https://www.wtatennis.com'
@@ -414,52 +416,117 @@ export async function extractWTA(url: string): Promise<WTAExtracted | null> {
     let loader: LoaderSource = headlessPrimary ? 'puppeteer' : 'fetch'
     let status: number | undefined
     let html: string | null = null
+    let lastChallenge: ChallengeDetection | null = null
 
     if (headlessPrimary) {
       const headlessHtml = await loadViaPuppeteer(url)
-      if (headlessHtml) html = headlessHtml
+      if (headlessHtml) {
+        const challenge = detectChallenge(headlessHtml)
+        if (challenge) {
+          console.warn('[extract:wta] challenge via puppeteer', challenge, { url })
+          lastChallenge = challenge
+        } else {
+          html = headlessHtml
+        }
+      }
     }
 
     if (!html) {
       const fetched = await loadViaFetch(url)
       if (fetched) {
-        html = fetched.html
         status = fetched.status
-        loader = 'fetch'
+        const challenge = detectChallenge(fetched.html)
+        if (challenge) {
+          console.warn('[extract:wta] challenge via fetch', challenge, { url, status })
+          lastChallenge = challenge
+        } else {
+          html = fetched.html
+          loader = 'fetch'
+        }
       }
     }
 
     if (!html && !headlessPrimary) {
       const headlessHtml = await loadViaPuppeteer(url)
       if (headlessHtml) {
-        html = headlessHtml
-        loader = 'puppeteer'
+        const challenge = detectChallenge(headlessHtml)
+        if (challenge) {
+          console.warn('[extract:wta] challenge via fallback puppeteer', challenge, { url })
+          lastChallenge = challenge
+        } else {
+          html = headlessHtml
+          loader = 'puppeteer'
+        }
       }
     }
 
-    if (!html) return null
+    if (!html) {
+      if (lastChallenge) {
+        return {
+          challenge: lastChallenge,
+          _debug: {
+            extractor: 'wta',
+            status,
+            loader,
+            note: `challenge:${lastChallenge.type}`,
+          },
+        }
+      }
+      return null
+    }
 
     let dom = new JSDOM(html)
     let doc = dom.window.document
     let container = resolveBodyContainer(doc)
 
-    const ensureContainer = async () => {
+    const ensureContainer = async (): Promise<ChallengeDetection | null> => {
       const textLength = container?.textContent?.trim().length ?? 0
-      if (container && textLength > 0) return
+      if (container && textLength > 0) return null
       const headlessHtml = await loadViaPuppeteer(url)
-      if (!headlessHtml) return
+      if (!headlessHtml) return null
       html = headlessHtml
+      const challenge = detectChallenge(html)
+      if (challenge) {
+        console.warn('[extract:wta] challenge detected during ensureContainer', challenge, { url })
+        lastChallenge = challenge
+        return challenge
+      }
       loader = 'puppeteer'
       dom = new JSDOM(html)
       doc = dom.window.document
       container = resolveBodyContainer(doc)
+      return null
     }
 
     if (!container || !(container.textContent?.trim())) {
-      await ensureContainer()
+      const ensureChallenge = await ensureContainer()
+      if (ensureChallenge) {
+        return {
+          challenge: ensureChallenge,
+          _debug: {
+            extractor: 'wta',
+            status,
+            loader: 'puppeteer',
+            note: `challenge:${ensureChallenge.type}`,
+          },
+        }
+      }
     }
 
-    if (!container) return null
+    if (!container) {
+      if (lastChallenge) {
+        return {
+          challenge: lastChallenge,
+          _debug: {
+            extractor: 'wta',
+            status,
+            loader,
+            note: `challenge:${lastChallenge.type}`,
+          },
+        }
+      }
+      return null
+    }
 
     const origin = new URL(url).origin || ORIGIN
     cleanContainer(container, origin, doc)
@@ -475,6 +542,20 @@ export async function extractWTA(url: string): Promise<WTAExtracted | null> {
         if (fetched) {
           html = fetched.html
           status = fetched.status
+          const challenge = detectChallenge(html)
+          if (challenge) {
+            console.warn('[extract:wta] challenge detected during ensureContainer fetch', challenge, { url, status })
+            lastChallenge = challenge
+            return {
+              challenge,
+              _debug: {
+                extractor: 'wta',
+                status,
+                loader: 'fetch',
+                note: `challenge:${challenge.type}`,
+              },
+            }
+          }
           loader = 'fetch'
           dom = new JSDOM(html)
           doc = dom.window.document
@@ -488,6 +569,20 @@ export async function extractWTA(url: string): Promise<WTAExtracted | null> {
         const headlessHtml = await loadViaPuppeteer(url)
         if (headlessHtml) {
           html = headlessHtml
+          const challenge = detectChallenge(html)
+          if (challenge) {
+            console.warn('[extract:wta] challenge detected during sanitize fallback', challenge, { url })
+            lastChallenge = challenge
+            return {
+              challenge,
+              _debug: {
+                extractor: 'wta',
+                status,
+                loader: 'puppeteer',
+                note: `challenge:${challenge.type}`,
+              },
+            }
+          }
           loader = 'puppeteer'
           dom = new JSDOM(html)
           doc = dom.window.document
