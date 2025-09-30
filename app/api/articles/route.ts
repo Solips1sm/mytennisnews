@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getClient } from '@/lib/sanity'
 import { ARTICLES_PAGINATED, ARTICLES_PAGINATED_PUBLISHED } from '@/lib/queries'
 
+export const dynamic = 'force-dynamic'
+
 const DEFAULT_PAGE_SIZE = 12
 const MAX_PAGE_SIZE = 500
 
