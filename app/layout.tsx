@@ -1,5 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
+import { Analytics } from '@vercel/analytics/react'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { uiFont, bodyFont } from './fonts'
@@ -29,6 +30,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <main className="mx-auto max-w-6xl px-1 md:px-2 2xl:px-4 py-2 md:py-4 2xl:py-6">{children}</main>
         <SiteFooter />
+        <Analytics />
       </body>
     </html>
   )
