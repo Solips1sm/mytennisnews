@@ -16,6 +16,8 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -eu
+          CRON_URL="$(printf '%s' "${CRON_URL:-}" | tr -d '\r')"
+          CRON_SECRET="$(printf '%s' "${CRON_SECRET:-}" | tr -d '\r')"
           if [ -z "${CRON_URL:-}" ]; then
             echo "CRON_ENDPOINT secret is not set" >&2
             exit 1
@@ -24,6 +26,7 @@ jobs:
             echo "CRON_SECRET secret is not set" >&2
             exit 1
           fi
+          printf 'Invoking cron endpoint: %s\n' "$CRON_URL"
           curl -fsS -X POST "$CRON_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
