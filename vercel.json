@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/cron-cycle",
-      "schedule": "*/30 * * * *"
-    }
-  ]
-}
