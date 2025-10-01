@@ -39,7 +39,7 @@ function hasPublishableAiBody(draft: Record<string, any>): boolean {
 export async function publishReadyArticles(options: PublishOptions = {}): Promise<PublishSummary> {
   const logger = options.logger ?? console
   const drafts: Array<Record<string, any>> = await serverClient.fetch(
-  `*[_type == "article" && _id in path('drafts.**') && defined(aiFinal.body) && !(coalesce(aiFinal.body, "") match "^[[:space:]]*$") && status != "published"]{
+  `*[_type == "article" && _id in path("drafts.**") && length(coalesce(aiFinal.body, "")) > 0 && status != "published"]{
       _id,
       _type,
       title,
