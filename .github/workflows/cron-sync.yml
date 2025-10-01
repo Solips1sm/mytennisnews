@@ -27,8 +27,22 @@ jobs:
             exit 1
           fi
           printf 'Invoking cron endpoint: %s\n' "$CRON_URL"
-          curl -fsS -X POST "$CRON_URL" \
+          response_file="$(mktemp)"
+          http_status=$(curl --silent --show-error -X POST "$CRON_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
             -H "Content-Type: application/json" \
             --data '{"source":"github-actions"}' \
-            --max-time 60
+            --max-time 60 \
+            --write-out '%{http_code}' \
+            --output "$response_file")
+
+          printf 'Cron endpoint status: %s\n' "$http_status"
+          printf 'Cron endpoint response:\n'
+          cat "$response_file"
+          printf '\n'
+          rm -f "$response_file"
+
+          if [ "$http_status" -ge 400 ]; then
+            echo "Cron endpoint returned error status" >&2
+            exit 1
+          fi
