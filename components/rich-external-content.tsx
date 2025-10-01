@@ -67,6 +67,42 @@ function flattenText(node?: NodeLike): string | undefined {
   return node.children.map((c) => flattenText(c) || '').join('').trim() || undefined
 }
 
+const UUID_IN_PARENS_REGEX = /\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)\s*$/i
+
+function stripEspnProfileIds(html: string): string {
+  if (!html) return html
+
+  const fallback = html.replace(
+    /(>)([^<>]*?)(?:\s*\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\))(<\/a>)/gi,
+    (_, open, name, __uuid, close) => `${open}${name.trim()}${close}`,
+  )
+
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') return fallback
+
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(`<div data-root="root">${html}</div>`, 'text/html')
+    const root = doc.querySelector('div[data-root="root"]')
+    if (!root) return fallback
+
+    const anchors = Array.from(root.querySelectorAll('a'))
+    anchors.forEach((anchor) => {
+      const text = anchor.textContent?.trim() || ''
+      const match = text.match(/^(.+?)\s*\(([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\)$/i)
+      if (match) {
+        const clean = match[1].replace(/\s+/g, ' ').trim()
+        anchor.textContent = clean
+      } else if (UUID_IN_PARENS_REGEX.test(text)) {
+        anchor.textContent = text.replace(UUID_IN_PARENS_REGEX, '').trim()
+      }
+    })
+
+    return root.innerHTML
+  } catch {
+    return fallback
+  }
+}
+
 function wrapLooseTextNodes(html: string): string {
   if (!html) return html
   if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
@@ -213,7 +249,9 @@ export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { htm
     })
   }, [html, isESPN])
 
-  const normalized = useMemo(() => wrapLooseTextNodes(sanitized), [sanitized])
+  const sanitizedWithoutIds = useMemo(() => stripEspnProfileIds(sanitized), [sanitized])
+
+  const normalized = useMemo(() => wrapLooseTextNodes(sanitizedWithoutIds), [sanitizedWithoutIds])
 
   const sanitizedWithoutPrimary = useMemo(() => {
     if (!primaryImageUrl) return normalized
