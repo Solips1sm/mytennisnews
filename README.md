@@ -337,7 +337,7 @@ Every script honours shared settings:
 
 All three stages expose guarded API routes (set `CRON_SECRET` in Vercel):
 
-- `POST https://<your-domain>/api/cron-ingest`
+- `GET https://<your-domain>/api/cron-ingest`
 - `POST https://<your-domain>/api/cron-backfill`
 - `POST https://<your-domain>/api/cron-publish`
 
@@ -358,7 +358,7 @@ Configuration steps:
 1. Open **GitHub → Settings → Secrets and variables → Actions**.
 2. Add repository secrets:
 	- `CRON_SECRET` — same bearer token used in Vercel.
-	- `CRON_INGEST_ENDPOINT` — production URL for `POST /api/cron-ingest` (use the canonical domain, e.g. `https://www.mytennisnews.com/api/cron-ingest`).
+	- `CRON_INGEST_ENDPOINT` — production URL for `/api/cron-ingest` (use the canonical domain, e.g. `https://www.mytennisnews.com/api/cron-ingest`). The workflow uses `GET` to avoid platform 405s, but the route also accepts `POST` for manual callers.
 	- `CRON_BACKFILL_ENDPOINT` — production URL for `POST /api/cron-backfill`.
 	- `CRON_PUBLISH_ENDPOINT` — production URL for `POST /api/cron-publish`.
 3. (Optional) Create repository variables:
