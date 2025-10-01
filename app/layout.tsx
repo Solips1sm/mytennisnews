@@ -7,16 +7,135 @@ import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { uiFont, bodyFont } from './fonts'
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://mytennisnews.com'
+const siteName = 'MyTennisNews'
+const defaultTitle = 'MyTennisNews — Tennis news for the global community'
+const defaultDescription =
+  'MyTennisNews is a digital-first tennis news platform bringing stories, live context, and personal coverage to the global tennis community.'
+const logoUrl = `${siteUrl}/android-chrome-512x512.png`
+
+const verificationOther: Record<string, string> = {}
+if (process.env.NEXT_PUBLIC_AHREFS_VERIFICATION) {
+  verificationOther['ahrefs-site-verification'] = process.env.NEXT_PUBLIC_AHREFS_VERIFICATION
+}
+if (process.env.NEXT_PUBLIC_BING_VERIFICATION) {
+  verificationOther['msvalidate.01'] = process.env.NEXT_PUBLIC_BING_VERIFICATION
+}
+const verificationMeta = Object.keys(verificationOther).length ? { other: verificationOther } : undefined
+
 export const metadata: Metadata = {
-  title: 'MyTennisNews',
-  description: 'Tennis news, curated with proper attribution.',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: defaultTitle,
+    template: 'MyTennisNews',
+  },
+  description: defaultDescription,
+  applicationName: siteName,
+  keywords: [
+    'tennis news platform',
+    'tennis community',
+    'daily tennis stories',
+    'grand slam coverage',
+    'ATP and WTA analysis',
+    'tennis culture',
+    'tennis newsletter',
+  ],
+  category: 'Sports',
+  creator: 'MyTennisNews Editorial',
+  publisher: 'MyTennisNews Media Group',
+  alternates: {
+    canonical: siteUrl,
+  },
+  openGraph: {
+    type: 'website',
+    url: siteUrl,
+    siteName,
+    title: defaultTitle,
+    description: defaultDescription,
+    locale: 'en_US',
+    images: [
+      {
+        url: `${siteUrl}/og`,
+        width: 1200,
+        height: 630,
+        alt: `${siteName} — Tennis news for the global community`,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: defaultTitle,
+    description: defaultDescription,
+    images: [`${siteUrl}/og`],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    nocache: false,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-snippet': -1,
+      'max-image-preview': 'large',
+      'max-video-preview': -1,
+    },
+  },
+  verification: verificationMeta,
+  icons: {
+    icon: [
+      { url: '/favicon.ico', type: 'image/x-icon' },
+      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/android-chrome-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: '/android-chrome-512x512.png', sizes: '512x512', type: 'image/png' },
+    ],
+    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+  },
+  manifest: '/site.webmanifest',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+  ],
+  other: {
+    'rating': 'general',
+  },
 }
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID
 
+const organizationSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'NewsMediaOrganization',
+  name: siteName,
+  alternateName: defaultTitle,
+  url: siteUrl,
+  logo: {
+    '@type': 'ImageObject',
+    url: logoUrl,
+  },
+  description: defaultDescription,
+  slogan: 'Personal tennis stories for a connected community',
+  areaServed: {
+    '@type': 'Place',
+    name: 'Global',
+  },
+  inLanguage: 'en-US',
+  publishingPrinciples: siteUrl,
+  knowsAbout: ['Tennis', 'Grand Slams', 'ATP Tour', 'WTA Tour', 'Tennis Rankings', 'Tennis Community', 'Tennis Analytics'],
+  audience: {
+    '@type': 'Audience',
+    audienceType: 'Tennis Enthusiasts',
+  },
+}
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${uiFont.variable} ${bodyFont.variable}`}>
+      <head>
+        <Script id="organization-schema" type="application/ld+json" strategy="beforeInteractive">
+          {JSON.stringify(organizationSchema)}
+        </Script>
+      </head>
       <body className="min-h-screen bg-background text-foreground antialiased">
         <script
           dangerouslySetInnerHTML={{
