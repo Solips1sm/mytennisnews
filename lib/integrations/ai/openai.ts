@@ -61,6 +61,7 @@ Structure rules:
 • Use two or three <h2> subheads after the opener; each is 4–8 words, written in sentence case (only proper nouns capitalized), and previews the emotional or tactical pivot that follows.
 • Wrap every narrative block in a <p> tag—no loose text nodes or generic wrappers for prose. Keep tags properly closed and avoid orphaned inline markup.
 • Keep paragraphs grouped beneath the relevant subhead; each paragraph is compact, propulsive, and never reads like a checklist or blueprint.
+• End paragraphs only after the final sentence punctuation (., ?, !); do not break mid-sentence or leave fragments hanging.
 • Quotes (when derived from source) use <div class="ext-quote"><blockquote>...</blockquote></div> and appear after paragraph 2.
 • Do not fabricate social embeds. Place provided embed tokens on their own paragraph and never wrap commentary in <div class="ext-social"> unless the embed itself requires that wrapper.
 • Never fabricate quotes or social posts. Do not add trailing citation blocks.
@@ -1221,14 +1222,14 @@ export class OpenAIPipeline implements AIPipelineProvider {
         ? 'Synthesize the strongest final article: merge the best insights, remove duplicate phrasing, keep unique player mentions once per paragraph, and resolve tone/tense conflicts.'
         : undefined,
       `Title & excerpt: craft a headline that feels like a human tennis feature (no gimmicky colons or ALL CAPS) and an excerpt that invites the reader in with tension or momentum—avoid repeating the opener verbatim.`,
-  `Body requirements:\n• Minimum length ${minTarget} characters.\n• Use 2–3 <h2> subheads after the opener; each is 4–8 words, in sentence case, and hints at the human or tactical pivot that follows.\n• Wrap every paragraph-worthy block in <p>...</p> tags—no raw text directly inside the root or generic <div> wrappers for prose.\n• Keep paragraphs grouped beneath those subheads; avoid bullet lists, numbered steps, or blueprint language.\n• Keep the opening paragraph free of attributions. From paragraph two onward, vary verbs (limit the exact phrase "according to" to one use).\n• Emphasize concrete tennis detail (patterns, surfaces, adjustments) while weaving in emotion, crowd energy, and context.`,
+  `Body requirements:\n• Minimum length ${minTarget} characters.\n• Use 2–3 <h2> subheads after the opener; each is 4–8 words, in sentence case, and hints at the human or tactical pivot that follows.\n• Wrap every paragraph-worthy block in <p>...</p> tags—no raw text directly inside the root or generic <div> wrappers for prose.\n• Keep paragraphs grouped beneath those subheads; avoid bullet lists, numbered steps, or blueprint language.\n• Never split paragraphs mid-sentence; ensure each ends with proper terminal punctuation (., ?, !).\n• Do not append trailing decorative symbols (e.g., ###, *** or long ellipses) and avoid leaving dangling punctuation.\n• Keep the opening paragraph free of attributions. From paragraph two onward, vary verbs (limit the exact phrase "according to" to one use).\n• Emphasize concrete tennis detail (patterns, surfaces, adjustments) while weaving in emotion, crowd energy, and context.`,
       `Reference handling:\n• Mention each subject once with its provided wording, then prefer pronouns or descriptors.\n• Integrate links naturally within sentences; no trailing "Source" blocks or link lists.\n• Never repeat the same full name back-to-back or create doubled wording.`,
       `Link formatting: never output bare URLs, markdown links, or parentheses containing URLs. Write the subject text only; downstream formatting attaches the href.`,
       `Media handling:\n${mediaRequirement}`,
       'Narrative voice: write with the cadence of a seasoned tennis analyst on site—blend tactile imagery (light, sound, tempo) with strategic insight, and close sections with forward-looking beats rather than summaries.',
       `Language hygiene:\n• Remove emojis/hashtags.\n• Prefer "slice"/"underspin", "inside-in"/"inside-out", "down-the-line", "crosscourt", and "1–2"/"one–two" combinations.\n• Keep paragraphs concise (2–4 sentences) and never use ALL CAPS.`,
       linkRequirement,
-      'HTML hygiene: output valid HTML5 fragment with balanced tags, no Markdown fences, no self-invented wrapper elements for plain text, and never leave dangling <div> or </p> markers.',
+  'HTML hygiene: output valid HTML5 fragment with balanced tags, no Markdown fences, no self-invented wrapper elements for plain text, and never leave dangling <div> or </p> markers or decorative trailing punctuation like ###.',
       strategy === 'variant'
         ? 'Distinctiveness: diverge from other drafts by highlighting different match context, stats, or tactical takeaways while remaining factual.'
         : undefined,
