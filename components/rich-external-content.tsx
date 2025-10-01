@@ -67,6 +67,57 @@ function flattenText(node?: NodeLike): string | undefined {
   return node.children.map((c) => flattenText(c) || '').join('').trim() || undefined
 }
 
+function wrapLooseTextNodes(html: string): string {
+  if (!html) return html
+  if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+    return html
+  }
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(`<div data-root="root">${html}</div>`, 'text/html')
+    const root = doc.querySelector('div[data-root="root"]')
+    if (!root) return html
+
+    const WRAPPABLE = new Set(['div', 'section', 'article', 'main', 'blockquote'])
+    const SKIP_CLASS = /(ext-embed|ext-twitter|ext-video|ext-social)/
+
+    const processElement = (el: Element) => {
+      const tag = el.tagName.toLowerCase()
+      const shouldWrap = WRAPPABLE.has(tag) && !SKIP_CLASS.test(el.className || '')
+      const children = Array.from(el.childNodes)
+      children.forEach((child) => {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const raw = child.textContent || ''
+          const trimmed = raw.replace(/[\u00A0]+/g, ' ').trim()
+          if (trimmed && shouldWrap) {
+            const segments = trimmed.split(/\n{2,}|\r{2,}/).map((segment) => segment.trim()).filter(Boolean)
+            let previous: ChildNode | null = child
+            segments.forEach((segment) => {
+              const p = doc.createElement('p')
+              p.textContent = segment
+              if (previous && previous.parentNode === el) {
+                el.insertBefore(p, previous.nextSibling)
+                previous = p
+              } else {
+                el.insertBefore(p, child)
+                previous = p
+              }
+            })
+          }
+          el.removeChild(child)
+        } else if (child.nodeType === Node.ELEMENT_NODE) {
+          processElement(child as Element)
+        }
+      })
+    }
+
+    processElement(root)
+    return root.innerHTML
+  } catch {
+    return html
+  }
+}
+
 export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { html: string; sourceHost?: string; primaryImageUrl?: string }) {
   const isESPN = !!sourceHost?.includes('espn.com')
   const isBrowser = typeof window !== 'undefined' && typeof DOMParser !== 'undefined'
@@ -162,17 +213,19 @@ export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { htm
     })
   }, [html, isESPN])
 
+  const normalized = useMemo(() => wrapLooseTextNodes(sanitized), [sanitized])
+
   const sanitizedWithoutPrimary = useMemo(() => {
-    if (!primaryImageUrl) return sanitized
+    if (!primaryImageUrl) return normalized
     const normalizedPrimary = normalizeSrc(primaryImageUrl)
-    if (!normalizedPrimary) return sanitized
+    if (!normalizedPrimary) return normalized
 
     if (isBrowser && typeof DOMParser !== 'undefined') {
       try {
         const parser = new DOMParser()
-        const doc = parser.parseFromString(`<div data-root="root">${sanitized}</div>`, 'text/html')
+        const doc = parser.parseFromString(`<div data-root="root">${normalized}</div>`, 'text/html')
         const root = doc.querySelector('div[data-root="root"]')
-        if (!root) return sanitized
+        if (!root) return normalized
         const images = Array.from(root.querySelectorAll('img'))
         images.forEach((img) => {
           const src = img.getAttribute('src')
@@ -194,10 +247,10 @@ export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { htm
 
     const pattern = new RegExp(`<([^>]+)?img[^>]+src=["']${normalizedPrimary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>[\\s]*</?(?:picture|figure)[^>]*>?`, 'gi')
     const simpleImgPattern = new RegExp(`<img[^>]+src=["']${normalizedPrimary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][^>]*>`, 'gi')
-    let result = sanitized.replace(pattern, '')
+    let result = normalized.replace(pattern, '')
     result = result.replace(simpleImgPattern, '')
     return result
-  }, [primaryImageUrl, sanitized, isBrowser])
+  }, [primaryImageUrl, normalized, isBrowser])
 
   const enhanced = useMemo(() => {
     const socialLinkRegex = /<p>(\s*)<a([^>]+href=\"[^\"]*(?:twitter\.com|x\.com|instagram\.com|youtu\.be|youtube\.com)[^\"]*)\"[^>]*>[^<]+<\/a>(\s*)<\/p>/gi

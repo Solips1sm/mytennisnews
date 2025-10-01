@@ -1,7 +1,7 @@
 export type Tag = {
   _id: string
   name: string
-  slug: string
+  slug?: string
 }
 
 export type Source = {
@@ -20,5 +20,6 @@ export type Article = {
   publishedAt?: string
   source?: Source
   authors?: string[]
+  leadImageUrl?: string
   tags?: Tag[]
 }

@@ -105,7 +105,7 @@ function resolveBodyContainer(doc: Document): HTMLElement {
 const defaultAllowedAttributes = (sanitizeHtml.defaults.allowedAttributes || {}) as Record<string, string[]>
 
 const SANITIZE_ALLOWED_TAGS = Array.from(
-  new Set([...sanitizeHtml.defaults.allowedTags, 'figure', 'figcaption', 'iframe', 'br'])
+  new Set([...sanitizeHtml.defaults.allowedTags, 'figure', 'figcaption', 'iframe', 'aside', 'br'])
 )
 
 const SANITIZE_ALLOWED_ATTRIBUTES: sanitizeHtml.IOptions['allowedAttributes'] = {
@@ -116,10 +116,21 @@ const SANITIZE_ALLOWED_ATTRIBUTES: sanitizeHtml.IOptions['allowedAttributes'] = 
   ),
   iframe: ['src', 'title', 'allow', 'allowfullscreen', 'width', 'height'],
   figure: ['data-caption'],
+  blockquote: Array.from(
+    new Set([...(defaultAllowedAttributes.blockquote || []), 'class', 'data-instgrm-permalink', 'data-instgrm-version', 'data-instgrm-captioned'])
+  ),
+  aside: Array.from(
+    new Set([...(defaultAllowedAttributes.aside || []), 'class', 'data-widget', 'data-instgrm-permalink', 'data-instgrm-version', 'data-instgrm-captioned'])
+  ),
+  div: Array.from(
+    new Set([...(defaultAllowedAttributes.div || []), 'class', 'data-widget', 'data-instgrm-permalink', 'data-instgrm-version', 'data-instgrm-captioned'])
+  ),
+  '*': Array.from(new Set([...(defaultAllowedAttributes['*'] || []), 'data-*'])),
 }
 
 const SANITIZE_ALLOWED_CLASSES: sanitizeHtml.IOptions['allowedClasses'] = {
-  blockquote: ['twitter-tweet'],
+  blockquote: ['twitter-tweet', 'instagram-media'],
+  aside: ['instagram-post', 'articleWidget', 'center'],
 }
 
 const SANITIZE_IFRAME_HOSTS = [
@@ -293,7 +304,6 @@ function cleanContainer(container: HTMLElement, origin: string, doc: Document) {
     'noscript',
     'form',
     'svg',
-    '.articleWidget',
     '.embeddable-related-articles',
     '.related-videos',
     '.responsive-ad',
@@ -307,6 +317,30 @@ function cleanContainer(container: HTMLElement, origin: string, doc: Document) {
     '.pager',
   ]
   container.querySelectorAll(removalSelectors.join(', ')).forEach((el) => el.remove())
+
+  const shouldPreserveWidget = (widget: Element): boolean => {
+    const selector = [
+      'aside.instagram-post',
+      'blockquote.instagram-media',
+      'blockquote.twitter-tweet',
+      'iframe',
+      'video',
+      'div[data-oembed-url]',
+      'div[data-instgrm-permalink]',
+      'div[data-fek-poll]',
+      'div[data-provider]',
+      'script[src*="instagram.com"]',
+    ].join(', ')
+    return !!widget.querySelector(selector)
+  }
+
+  Array.from(container.querySelectorAll('.articleWidget')).forEach((widget) => {
+    if (shouldPreserveWidget(widget)) {
+      unwrapElement(widget)
+    } else {
+      widget.remove()
+    }
+  })
 
   Array.from(container.querySelectorAll('[class*="player-headshot"], .article-page__player-tooltip-img')).forEach((el) =>
     el.remove()

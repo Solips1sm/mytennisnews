@@ -46,7 +46,7 @@ export function FullscreenImage({
       const name = u.pathname.split('/').filter(Boolean).pop() || 'image'
       const inferred = name.split('?')[0]
       if (alt) {
-        const prefix = alt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+        const prefix = alt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
         return prefix ? `${prefix}-${inferred}` : inferred
       }
       return inferred

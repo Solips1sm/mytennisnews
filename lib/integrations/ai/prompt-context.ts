@@ -27,6 +27,60 @@ type ExtractionOptions = {
 type LinkExtractionOptions = {
   body?: any
   externalHtml?: string
+  canonicalUrl?: string
+}
+
+type LinkAccumulator = {
+  text: string
+  url: string
+  context?: string
+  firstIndex: number
+}
+
+function createContextSnippet(raw: string | undefined | null, highlight?: string): string | undefined {
+  if (!raw) return undefined
+  const collapsed = raw.replace(/[\s\u00A0]+/g, ' ').trim()
+  if (!collapsed) return undefined
+  const maxLength = 220
+  const highlightValue = highlight?.trim()
+  const lowerCollapsed = collapsed.toLowerCase()
+  const lowerHighlight = highlightValue?.toLowerCase()
+  let marked = collapsed
+  let idx = -1
+  if (lowerHighlight) idx = lowerCollapsed.indexOf(lowerHighlight)
+  if (idx >= 0 && highlightValue) {
+    const end = idx + highlightValue.length
+    marked = `${collapsed.slice(0, idx)}«${collapsed.slice(idx, end)}»${collapsed.slice(end)}`
+  }
+  if (marked.length <= maxLength) return marked
+  const mid = idx >= 0 ? idx : Math.floor(marked.length / 2)
+  const start = Math.max(0, mid - Math.floor(maxLength / 2))
+  const end = Math.min(marked.length, start + maxLength)
+  let snippet = marked.slice(start, end)
+  if (start > 0) snippet = `…${snippet}`
+  if (end < marked.length) snippet = `${snippet}…`
+  return snippet
+}
+
+function findPrecedingText(el: Element | null): string | undefined {
+  let current: Element | null = el
+  let depth = 0
+  while (current && depth < 5) {
+    let sibling = current.previousSibling
+    while (sibling) {
+      if (sibling.nodeType === 3) {
+        const text = (sibling.textContent || '').replace(/[\s\u00A0]+/g, ' ').trim()
+        if (text) return text
+      } else if (sibling.nodeType === 1) {
+        const text = (sibling as Element).textContent?.replace(/[\s\u00A0]+/g, ' ').trim()
+        if (text) return text
+      }
+      sibling = sibling.previousSibling
+    }
+    current = current.parentElement
+    depth += 1
+  }
+  return undefined
 }
 
 function resolveUrl(url: string | null | undefined, canonical?: string): string | undefined {
@@ -45,30 +99,44 @@ function resolveUrl(url: string | null | undefined, canonical?: string): string 
   return trimmed
 }
 
-function extractLinks({ body, externalHtml }: LinkExtractionOptions): LinkReference[] {
-  const map = new Map<string, LinkReference>()
+function extractLinks({ body, externalHtml, canonicalUrl }: LinkExtractionOptions): LinkReference[] {
+  const map = new Map<string, LinkAccumulator>()
+  let sequence = 0
+
+  const record = (text: string, href: string, context?: string) => {
+    const url = resolveUrl(href, canonicalUrl) || href
+    const key = url || href
+    if (!key) return
+    const trimmedText = text.trim()
+    if (!trimmedText) return
+    if (!map.has(key)) {
+      map.set(key, { text: trimmedText, url, context, firstIndex: sequence++ })
+    } else {
+      const entry = map.get(key)!
+      if (!entry.context && context) entry.context = context
+    }
+  }
 
   if (Array.isArray(body)) {
     for (const block of body) {
       if (!Array.isArray(block?.markDefs)) continue
-      const markDefs = block.markDefs
-      for (const def of markDefs) {
-        if (def?._type === 'link' && typeof def.href === 'string') {
-          const href = def.href.trim()
-          if (!href) continue
-          const text = Array.isArray(block.children)
-            ? block.children
-                .filter((child: any) => Array.isArray(child?.marks) && child.marks.includes(def._key))
-                .map((child: any) => child?.text || '')
-                .join('')
-                .trim()
-            : ''
-          if (!text) continue
-          const key = `${text.toLowerCase()}::${href}`
-          if (!map.has(key)) {
-            map.set(key, { text, url: href })
-          }
-        }
+      const blockText = Array.isArray(block.children)
+        ? block.children.map((child: any) => child?.text || '').join('')
+        : ''
+      for (const def of block.markDefs) {
+        if (def?._type !== 'link' || typeof def.href !== 'string') continue
+        const href = def.href.trim()
+        if (!href) continue
+        const text = Array.isArray(block.children)
+          ? block.children
+              .filter((child: any) => Array.isArray(child?.marks) && child.marks.includes(def._key))
+              .map((child: any) => child?.text || '')
+              .join('')
+              .trim()
+          : ''
+        if (!text) continue
+        const context = createContextSnippet(blockText, text)
+        record(text, href, context)
       }
     }
   }
@@ -82,17 +150,27 @@ function extractLinks({ body, externalHtml }: LinkExtractionOptions): LinkRefere
         const href = anchor.getAttribute('href') || ''
         const text = anchor.textContent?.trim() || ''
         if (!href || !text) continue
-        const key = `${text.toLowerCase()}::${href}`
-        if (!map.has(key)) {
-          map.set(key, { text, url: href })
-        }
+        const contextNode = anchor.closest('p, li, figcaption, h2, h3, h4') || anchor.parentElement
+        const context = createContextSnippet(contextNode?.textContent || anchor.textContent, text)
+        record(text, href, context)
       }
     } catch {
       /* ignore */
     }
   }
 
-  return Array.from(map.values()).slice(0, 40)
+  const refs = Array.from(map.values())
+    .sort((a, b) => a.firstIndex - b.firstIndex)
+    .slice(0, 80)
+    .map((ref, idx) => ({
+      text: ref.text,
+      url: ref.url,
+      context: ref.context,
+      order: idx + 1,
+      token: `ref-${idx + 1}`,
+    }))
+
+  return refs
 }
 
 function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOptions): MediaExtractionResult {
@@ -111,7 +189,7 @@ function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOp
 
     const annotate = (
       el: Element,
-      entry: Omit<MediaReference, 'token'> & { preferFigure?: boolean; html?: string },
+      entry: Omit<MediaReference, 'token'> & { preferFigure?: boolean; html?: string; context?: string },
     ) => {
       let token: string | undefined
       if (entry.type === 'image') token = `[[IMG:${++imgIdx}]]`
@@ -124,6 +202,8 @@ function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOp
         description: entry.description,
         caption: entry.caption,
         html: entry.html,
+        context: entry.context,
+        order: mediaReferences.length + 1,
       }
       mediaReferences.push(media)
       const replacement = doc.createElement('p')
@@ -132,15 +212,26 @@ function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOp
       target.replaceWith(replacement)
     }
 
-    const nodeList = Array.from(root.querySelectorAll('figure, picture, img, iframe, video, blockquote.twitter-tweet, div[data-oembed-url]'))
+    const mediaSelectors = [
+      'figure',
+      'picture',
+      'img',
+      'iframe',
+      'video',
+      'blockquote.twitter-tweet',
+      'blockquote.instagram-media',
+      'aside.instagram-post',
+      'div[data-oembed-url]',
+    ]
+    const nodeList = Array.from(root.querySelectorAll(mediaSelectors.join(',')))
     for (const node of nodeList) {
       if (!(node instanceof dom.window.HTMLElement)) continue
       if (node.dataset.aiMediaVisited === '1') continue
       let type: MediaReference['type'] | undefined
       let url: string | undefined
       let description: string | undefined
-  let caption: string | undefined
-  let originalHtml: string | undefined
+      let caption: string | undefined
+      let originalHtml: string | undefined
 
       const figure = node.closest('figure') || (node.tagName === 'FIGURE' ? node : null)
       const targetEl = figure ?? node
@@ -149,6 +240,8 @@ function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOp
         const figcaption = figure.querySelector('figcaption')
         caption = figcaption?.textContent?.trim() || undefined
       }
+
+      const nearbyText = createContextSnippet(findPrecedingText(targetEl), undefined)
 
       if (targetEl.querySelector('img')) {
         const img = targetEl.querySelector('img')!
@@ -176,6 +269,19 @@ function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOp
         else type = 'embed'
         description = iframe?.getAttribute('title') || targetEl.getAttribute('aria-label') || undefined
         originalHtml = (targetEl as HTMLElement).outerHTML
+      } else if (targetEl.matches('blockquote.instagram-media') || targetEl.querySelector('blockquote.instagram-media')) {
+        const block = targetEl.matches('blockquote.instagram-media')
+          ? (targetEl as HTMLElement)
+          : (targetEl.querySelector('blockquote.instagram-media') as HTMLElement | null)
+        if (!block) {
+          targetEl.dataset.aiMediaVisited = '1'
+          continue
+        }
+        const link = block.querySelector('a[href]')
+        url = resolveUrl(link?.getAttribute('href') || '', canonicalUrl)
+        type = 'embed'
+        description = block.textContent?.trim().slice(0, 160)
+        originalHtml = (targetEl as HTMLElement).outerHTML
       } else if (targetEl.matches('blockquote.twitter-tweet')) {
         const link = targetEl.querySelector('a[href]')
         url = resolveUrl(link?.getAttribute('href') || '', canonicalUrl)
@@ -196,7 +302,9 @@ function extractMedia({ externalHtml, canonicalUrl, leadImageUrl }: ExtractionOp
       seen.add(`${type}:${url}`)
       targetEl.dataset.aiMediaVisited = '1'
 
-  annotate(targetEl, { type, url, description, caption, html: originalHtml, preferFigure: true })
+      const context = createContextSnippet(nearbyText || caption || description, undefined)
+
+      annotate(targetEl, { type, url, description, caption, html: originalHtml, preferFigure: true, context })
     }
 
     return { mediaReferences, htmlWithTokens: root.innerHTML }
@@ -216,7 +324,7 @@ export function buildPromptArtifacts(options: {
   mediaReferences?: MediaReference[]
 } {
   const { body, externalHtml, canonicalUrl, leadImageUrl } = options
-  const linkReferences = extractLinks({ body, externalHtml })
+  const linkReferences = extractLinks({ body, externalHtml, canonicalUrl })
 
   const { mediaReferences, htmlWithTokens } = extractMedia({ externalHtml, canonicalUrl, leadImageUrl })
 

@@ -4,10 +4,28 @@ export type DraftVariant = {
   body: string
 }
 
+export type GenerateArticleOptions = {
+  strategy?: 'single' | 'variant' | 'final'
+  variantHint?: string
+  label?: string
+  temperature?: number
+  retryTemperature?: number
+  minTarget?: number
+  variants?: DraftVariant[]
+}
+
+export type GenerateArticleBundleOptions = {
+  variantCount?: number
+  variantHints?: string[]
+  sourceName?: string | null
+}
+
 export type LinkReference = {
   text: string
   url: string
   context?: string
+  order?: number
+  token?: string
 }
 
 export type MediaReference = {
@@ -17,32 +35,26 @@ export type MediaReference = {
   description?: string
   caption?: string
   html?: string
+  context?: string
+  order?: number
 }
 
 export interface AIPipelineProvider {
   name: string
-  generateVariants(input: {
+  generateArticle(input: {
     title: string
     excerpt?: string
     bodyText?: string
     context?: string
     linkReferences?: LinkReference[]
     mediaReferences?: MediaReference[]
-  }, count: number): Promise<DraftVariant[]>
-  synthesizeFinal(variants: DraftVariant[], input: {
+  }, options?: GenerateArticleOptions): Promise<DraftVariant>
+  generateArticleBundle?(input: {
     title: string
     excerpt?: string
     bodyText?: string
     context?: string
     linkReferences?: LinkReference[]
     mediaReferences?: MediaReference[]
-  }): Promise<DraftVariant>
-}
-
-export function resolveVariantTargetCount(sourceName?: string | null): number {
-  const normalized = (sourceName || '').toLowerCase()
-  if (!normalized) return 5
-  if (normalized.includes('espn')) return 4
-  if (normalized.includes('atp') || normalized.includes('wta')) return 3
-  return 5
+  }, options?: GenerateArticleBundleOptions): Promise<{ variants: DraftVariant[]; final: DraftVariant }>
 }

@@ -239,18 +239,23 @@ export function BlogPage({
   // empty state
   if (!articles || articles.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-16 md:px-6 lg:px-8">
-        <div className="mx-auto max-w-xl text-center">
-          <h2 className="text-2xl font-semibold">No posts yet</h2>
-          <p className="mt-2 text-muted-foreground">Try adjusting your filters or check back soon.</p>
-          <div className="mt-6 flex items-center justify-center gap-3 text-sm">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <section className="container mx-auto px-4 py-16 md:px-6 lg:px-8" aria-labelledby="articles-empty-heading">
+        <div className="mx-auto max-w-2xl space-y-4 text-center">
+          <h2 id="articles-empty-heading" className="text-3xl font-semibold tracking-tight">Fresh stories incoming</h2>
+          <p className="text-muted-foreground">
+            We&apos;re still lining up today&apos;s match reports and long-form features. Subscribe above for the weekly digest, or explore the archives using the month filter on the sidebar.
+          </p>
+          <p className="text-muted-foreground">
+            Once the newsroom feed updates you can toggle between grid and list layouts, search for players, and jump directly to the original publishers for full context.
+          </p>
+          <div className="mt-6 flex items-center justify-center gap-3 text-sm text-muted-foreground" aria-hidden>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
               <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
             </svg>
-            <span>Switch between list and grid once articles appear.</span>
+            <span>Filters and layout controls unlock once articles are available.</span>
           </div>
         </div>
-      </div>
+      </section>
     )
   }
 

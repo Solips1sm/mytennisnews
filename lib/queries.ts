@@ -105,3 +105,10 @@ export const ARTICLES_DATES = groq`
 
 export const ARTICLES_DATES_PUBLISHED = groq`
 *[_type == "article" && !(_id in path('drafts.**')) && defined(publishedAt)] | order(publishedAt desc)[0...400]{ publishedAt }`
+
+export const ARTICLES_SITEMAP = groq`
+*[_type == "article" && !(_id in path('drafts.**')) && defined(slug.current)] | order(coalesce(publishedAt, _updatedAt) desc)[0...500]{
+  "slug": slug.current,
+  publishedAt,
+  _updatedAt
+}`

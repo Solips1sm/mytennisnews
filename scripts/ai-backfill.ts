@@ -5,20 +5,20 @@ import {
   backfillMissingAIDrafts,
   fetchById,
   fetchBySlug,
-  fetchTargets,
   createPipeline,
   runPipelineOnArticle,
   type ArticleLite,
 } from '../lib/workflows/ai-backfill'
+import { publishReadyArticles } from '../lib/workflows/publish-ready'
 
 // Load env from root and cms if present
 dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false })
 dotenvConfig({ path: path.resolve(process.cwd(), 'cms/.env'), override: false })
 
 async function main() {
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.GROK_API_KEY || process.env.OPENAI_API_KEY
   if (!apiKey) {
-    console.error('OPENAI_API_KEY missing')
+    console.error('GROK_API_KEY missing (fall back to OPENAI_API_KEY optional)')
     process.exit(1)
   }
   const idArg = process.argv.find((a) => a.startsWith('--id='))
@@ -35,7 +35,6 @@ async function main() {
 
   // Single doc mode by id or slug
   if (idArg || slugArg || idFragArg || idEnvFlag) {
-    const dryRun = process.argv.includes('--dry-run')
     let id = idArg ? idArg.split('=')[1] : undefined
     if (!id && idFragArg) {
       const frag = idFragArg.split('=')[1]
@@ -62,7 +61,10 @@ async function main() {
     return
   }
 
-  await backfillMissingAIDrafts({ apiKey, limit: max, concurrency, dryRun })
+  const publishSummary = await publishReadyArticles({ logger: console, dryRun })
+  console.log('[publish] summary', publishSummary)
+
+  await backfillMissingAIDrafts({ apiKey, limit: max, concurrency, dryRun, autoPublish: false })
 }
 
 main().catch((e) => { console.error(e); process.exit(1) })

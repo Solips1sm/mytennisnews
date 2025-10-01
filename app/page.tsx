@@ -1,10 +1,11 @@
+import Script from 'next/script'
 import { getClient } from '@/lib/sanity'
 import { ARTICLES_PAGINATED, ARTICLES_PAGINATED_PUBLISHED } from '@/lib/queries'
 import { BlogPage } from '@/components/blog-page'
 import { HeroSubscribe } from '@/components/hero-subscribe'
 
 type Tag = { _id: string; name: string; slug?: string }
-type Article = {
+type HomeArticle = {
   _id: string
   title: string
   slug?: string
@@ -12,6 +13,7 @@ type Article = {
   canonicalUrl?: string
   publishedAt?: string
   source?: { name?: string; url?: string }
+  leadImageUrl?: string
   tags?: Tag[]
 }
 
@@ -41,10 +43,10 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
     vars = { offset: 0, to: 200, start, end }
   }
   const listQuery = isPreview ? ARTICLES_PAGINATED : ARTICLES_PAGINATED_PUBLISHED
-  let { items, total } = await client.fetch<{ items: Article[]; total: number }>(listQuery, vars)
+  let { items, total } = await client.fetch<{ items: HomeArticle[]; total: number }>(listQuery, vars)
   if (isAll) {
     if (total > items.length) {
-      const full = await client.fetch<{ items: Article[]; total: number }>(listQuery, { offset: 0, to: total, start, end })
+      const full = await client.fetch<{ items: HomeArticle[]; total: number }>(listQuery, { offset: 0, to: total, start, end })
       items = full.items
       total = full.total
     }
@@ -53,8 +55,70 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
   const queryParams: Record<string, string | undefined> = {}
   if (month) queryParams.month = month
   if (normalizedPageSizeParam) queryParams.pageSize = normalizedPageSizeParam
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://mytennisnews.com'
+  const publisher = {
+    '@type': 'Organization',
+    name: 'MyTennisNews',
+    url: baseUrl,
+    logo: {
+      '@type': 'ImageObject',
+      url: `${baseUrl}/favicon.ico`,
+    },
+  }
+  const typedItems = items as HomeArticle[]
+  const structuredArticles = typedItems.slice(0, 20).map((article: HomeArticle, index) => {
+    const slugUrl = article.slug ? `${baseUrl}/${article.slug}` : undefined
+    const canonical = article.canonicalUrl || slugUrl
+    const leadImage = (article as any)?.leadImageUrl as string | undefined
+    return {
+      '@type': 'NewsArticle',
+      position: index + 1,
+      headline: article.title,
+      description: article.excerpt,
+      datePublished: article.publishedAt,
+      url: canonical,
+      mainEntityOfPage: canonical,
+      image: leadImage ? [leadImage] : undefined,
+      publisher,
+      author: article.source?.name
+        ? {
+            '@type': 'Organization',
+            name: article.source.name,
+            url: article.source.url,
+          }
+        : undefined,
+    }
+  })
+  const homepageSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    name: 'MyTennisNews — curated tennis coverage',
+    description: 'Daily tennis coverage, curated from trusted outlets with context and analysis.',
+    isPartOf: {
+      '@type': 'WebSite',
+      name: 'MyTennisNews',
+      url: baseUrl,
+    },
+    publisher,
+    mainEntity: {
+      '@type': 'ItemList',
+      itemListElement: structuredArticles
+        .filter((article) => Boolean(article.url))
+        .map((article, index) => ({
+          '@type': 'ListItem',
+          position: index + 1,
+          url: article.url,
+          item: article,
+        })),
+    },
+  }
+
   return (
     <section className="space-y-2 md:space-y-4 2xl:space-y-6">
+      <Script id="homepage-schema" type="application/ld+json">
+        {JSON.stringify(homepageSchema)}
+      </Script>
       <HeroSubscribe />
       <BlogPage
         initialArticles={items}

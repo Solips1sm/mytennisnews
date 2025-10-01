@@ -109,11 +109,12 @@ pnpm dev
 - **Secrets:** Store DB credentials only in Vercel’s Production env (`DATABASE_URL`).
 
 ### Application toggles & housekeeping
-- `NEXT_PUBLIC_APP_URL` → set to `https://mytennisnews.com` in Production.
+- `NEXT_PUBLIC_APP_URL` (and `NEXT_PUBLIC_SITE_URL` for structured data) → set to `https://mytennisnews.com` in Production.
 - `NEXT_PUBLIC_PREVIEW_MODE` → keep `false`; preview mode is entered via `/api/preview` when needed.
+- `NEXT_PUBLIC_GOOGLE_ANALYTICS_ID` → optional; when set, Google Analytics gtag tracking loads alongside Vercel Analytics.
 - `DRY_RUN` → leave `true` globally; set to `false` only for one-off destructive scripts (`cleanup:drafts`, `purge:ledger`).
 - `INGEST_DEBUG`, `INGEST_DEBUG_SAVE_HTML` → keep `false` in Production; enable temporarily when troubleshooting extractor output locally.
-- `OPENAI_API_KEY`, `RESEND_API_KEY`, and other provider secrets → store in Vercel env, never in the repo.
+- `GROK_API_KEY` (and optional legacy `OPENAI_API_KEY`), `RESEND_API_KEY`, and other provider secrets → store in Vercel env, never in the repo.
 - Ensure Vercel Cron (or your chosen scheduler) runs with the Production env vars so ingestion, AI backfill, and publishing use the right dataset and database.
 
 ### Data exposure guardrails
@@ -321,7 +322,7 @@ Environment toggles:
 - `CRON_SECRET` — required when calling `/api/cron-cycle` (send as `Authorization: Bearer <CRON_SECRET>` or `?secret=` query string).
 - `CRON_FEEDS` — comma-separated preset keys (default `espn,atp,wta`).
 - `CRON_AI_CONCURRENCY` — max concurrent AI generations (default `2`).
-- Standard Sanity tokens and `OPENAI_API_KEY` must be available in the environment.
+- Standard Sanity tokens and `GROK_API_KEY` must be available in the environment (optionally keep `OPENAI_API_KEY` for fallback).
 
 Example crontab entry (every 30 minutes):
 
@@ -423,7 +424,7 @@ This repo includes a synchronous AI pipeline that:
 
 ### Run the pipeline
 
-Prereqs: `OPENAI_API_KEY`, Sanity env vars.
+Prereqs: `GROK_API_KEY` (or fallback `OPENAI_API_KEY`), Sanity env vars.
 
 ```pwsh
 # Optional: ingest first to create drafts

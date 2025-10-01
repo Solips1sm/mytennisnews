@@ -7,13 +7,22 @@ dotenvConfig({ path: path.resolve(process.cwd(), '.env'), override: false })
 dotenvConfig({ path: path.resolve(process.cwd(), 'cms/.env'), override: false })
 
 import { serverClient } from '../lib/sanity'
-import { prisma } from '../lib/prisma'
 import { OpenAIPipeline } from '../lib/integrations/ai/openai'
-import { resolveVariantTargetCount, type DraftVariant } from '../lib/integrations/ai'
+import { type DraftVariant } from '../lib/integrations/ai'
 import { buildPromptArtifacts } from '../lib/integrations/ai/prompt-context'
 
 type StepTiming = { label: string; ms: number }
-type VariantStat = { index: number; titleChars: number; bodyChars: number; paragraphs: number }
+
+type PipelineRunResult = {
+  variantsGenerated: number
+  variantStats: Array<{ index: number; titleChars: number; bodyChars: number; paragraphs: number }>
+  finalHasBody: boolean
+  finalBodyChars: number
+  finalDraft: DraftVariant
+  usage: ReturnType<OpenAIPipeline['getUsageSummary']>
+  timings: StepTiming[]
+  totalElapsedMs: number
+}
 
 function formatMs(ms: number): string {
   if (ms >= 60_000) return `${(ms / 60_000).toFixed(2)}m`
@@ -21,19 +30,7 @@ function formatMs(ms: number): string {
   return `${ms}ms`
 }
 
-function computeVariantStats(variants: DraftVariant[]): VariantStat[] {
-  return variants.map((variant, idx) => {
-    const body = variant.body || ''
-    return {
-      index: idx + 1,
-      titleChars: variant.title?.length ?? 0,
-      bodyChars: body.length,
-      paragraphs: (body.match(/<p>/g) || []).length,
-    }
-  })
-}
-
-async function runPipelineForArticleId(_id: string) {
+async function runPipelineForArticleId(_id: string): Promise<PipelineRunResult | null> {
   const pipelineStart = Date.now()
   const timings: StepTiming[] = []
   const recordTiming = (label: string, ms: number) => timings.push({ label, ms })
@@ -59,6 +56,12 @@ async function runPipelineForArticleId(_id: string) {
     return serverClient.fetch(query, { id: _id }) as Promise<any>
   })
   if (!doc) throw new Error(`Article not found: ${_id}`)
+
+  const existingAiBody = typeof doc.aiFinal?.body === 'string' ? doc.aiFinal.body.trim() : undefined
+  if (existingAiBody && existingAiBody.length) {
+    console.info(`[pipeline] Skipping ${_id} because aiFinal.body already exists (${existingAiBody.length} chars).`)
+  return null
+  }
 
   console.info(`[pipeline] Document title: ${doc.title}`)
   if (doc.slug?.current) console.info(`[pipeline] Document slug: ${doc.slug.current}`)
@@ -86,10 +89,18 @@ async function runPipelineForArticleId(_id: string) {
     .join(' | ')
   if (context) console.info('[pipeline] Context:', context)
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) throw new Error('OPENAI_API_KEY missing')
-  const model = process.env.AI_MODEL || 'gpt-4o-mini'
+  const apiKey = process.env.GROK_API_KEY || process.env.OPENAI_API_KEY
+  if (!apiKey) throw new Error('GROK_API_KEY missing (fall back to OPENAI_API_KEY optional)')
+  const model = process.env.AI_MODEL || 'grok-4-fast-reasoning'
+  const baseURL = process.env.AI_BASE_URL || 'https://api.x.ai/v1'
+  const maxOutputTokens = Number(process.env.AI_MAX_OUTPUT_TOKENS || '480')
+  const promptTokenLimit = Number(process.env.AI_PROMPT_TOKEN_LIMIT || '2000000')
+  const totalTokenBudget = Number(process.env.AI_TOTAL_TOKEN_BUDGET || '4000000')
   const ai = new OpenAIPipeline(apiKey, model, {
+    baseURL,
+    maxOutputTokens,
+    promptTokenLimit,
+    totalTokenBudget,
     onUsage: (event) => {
       console.info('[ai] usage event', {
         label: event.label,
@@ -100,42 +111,41 @@ async function runPipelineForArticleId(_id: string) {
       })
     },
   })
-  console.info(`[pipeline] Using AI provider ${ai.name} model=${model}`)
+  console.info(`[pipeline] Using AI provider ${ai.name} model=${model} maxOutputTokens=${maxOutputTokens} baseURL=${baseURL} promptLimit=${promptTokenLimit} totalBudget=${totalTokenBudget}`)
 
-  const desiredVariantCount = resolveVariantTargetCount(sourceName)
-  console.info(`[pipeline] Variant target count: ${desiredVariantCount}`)
-  const rawVariants = await measure('Generate draft variants', async () => ai.generateVariants({
-    title,
-    excerpt,
-    bodyText,
-    context,
-    linkReferences: resolvedArtifacts.linkReferences,
-    mediaReferences: resolvedArtifacts.mediaReferences,
-  }, desiredVariantCount))
-  const variants = ai.finalizeDrafts(rawVariants, {
-    linkReferences: resolvedArtifacts.linkReferences,
-    mediaReferences: resolvedArtifacts.mediaReferences,
-  })
-  const variantStats = computeVariantStats(variants)
-  console.table(variantStats, ['index', 'titleChars', 'bodyChars', 'paragraphs'])
-  if (variantStats.length) {
-    const bodyChars = variantStats.map((s) => s.bodyChars)
-    const avg = bodyChars.reduce((sum, val) => sum + val, 0) / variantStats.length
-    console.info('[pipeline] Variant body char summary', {
-      average: Math.round(avg),
-      min: Math.min(...bodyChars),
-      max: Math.max(...bodyChars),
-    })
+  const preferredBundleSources = ['WTA', 'WTA Tour', 'ATP', 'ATP Tour', 'ESPN', 'ESPN.com']
+  const shouldBundle = !!sourceName && preferredBundleSources.some((name) => sourceName.toLowerCase().includes(name.toLowerCase()))
+
+  const bundleResult = shouldBundle
+    ? await measure('Generate article bundle', async () => ai.generateArticleBundle({
+      title,
+      excerpt,
+      bodyText,
+      context,
+      linkReferences: resolvedArtifacts.linkReferences,
+      mediaReferences: resolvedArtifacts.mediaReferences,
+    }, {
+      sourceName,
+    }))
+    : null
+
+  let variants: DraftVariant[] = []
+  let finalDraft: DraftVariant
+  if (bundleResult) {
+    variants = bundleResult.variants
+    finalDraft = bundleResult.final
+  } else {
+    finalDraft = await measure('Generate article', async () => ai.generateArticle({
+      title,
+      excerpt,
+      bodyText,
+      context,
+      linkReferences: resolvedArtifacts.linkReferences,
+      mediaReferences: resolvedArtifacts.mediaReferences,
+    }))
   }
 
-  const finalDraft = await measure('Synthesize final draft', async () => ai.synthesizeFinal(rawVariants, {
-    title,
-    excerpt,
-    bodyText,
-    context,
-    linkReferences: resolvedArtifacts.linkReferences,
-    mediaReferences: resolvedArtifacts.mediaReferences,
-  }))
+  const variantPool = variants.length ? variants : [finalDraft]
   console.info('[pipeline] Final draft stats', {
     titleChars: finalDraft.title?.length ?? 0,
     excerptChars: finalDraft.excerpt?.length ?? 0,
@@ -145,18 +155,23 @@ async function runPipelineForArticleId(_id: string) {
 
   await measure('Persist AI output to Sanity', async () => {
     const patch: any = {
-      aiVariants: variants.map((v: DraftVariant) => ({ _key: crypto.randomBytes(8).toString('hex'), ...v })),
+      aiVariants: variantPool.map((v: DraftVariant) => ({ _key: crypto.randomBytes(8).toString('hex'), ...v })),
       aiFinal: { ...finalDraft, provider: ai.name, model, createdAt: new Date().toISOString() },
     }
-    await serverClient.patch(_id).set(patch).commit()
-    await serverClient.patch(_id).set({ status: 'review' }).commit()
+    await serverClient.patch(doc._id).set(patch).commit()
+    await serverClient.patch(doc._id).set({ status: 'review' }).commit()
   })
 
   const usageSummary = ai.getUsageSummary()
   const totalElapsedMs = Date.now() - pipelineStart
   return {
-    variantsGenerated: variants.length,
-    variantStats,
+    variantsGenerated: variantPool.length,
+    variantStats: variantPool.map((variant, idx) => ({
+      index: idx + 1,
+      titleChars: variant.title?.length ?? 0,
+      bodyChars: variant.body?.length ?? 0,
+      paragraphs: (variant.body?.match(/<p>/g) || []).length,
+    })),
     finalHasBody: !!finalDraft?.body,
     finalBodyChars: finalDraft.body?.length ?? 0,
     finalDraft,
@@ -193,8 +208,8 @@ async function main() {
       const slug = arg.slice('slug:'.length)
       // Prefer draft if exists
       const query = `{
-        draft: *[_type=="article" && slug.current==$slug && _id in path('drafts.**')][0]._id,
-        pub: *[_type=="article" && slug.current==$slug && !(_id in path('drafts.**'))][0]._id
+        "draft": *[_type=="article" && slug.current==$slug && _id in path("drafts.**")][0]._id,
+        "pub": *[_type=="article" && slug.current==$slug && !(_id in path("drafts.**"))][0]._id
       }`
       const found = await serverClient.fetch(query, { slug })
       return found?.draft || found?.pub || ''
@@ -213,6 +228,10 @@ async function main() {
 
   const id = await resolveId(raw)
   const result = await runPipelineForArticleId(id)
+  if (!result) {
+    console.info('[pipeline] Skipped generation (existing AI draft).')
+    return
+  }
   console.info(`[pipeline] Completed in ${formatMs(result.totalElapsedMs)} (variants=${result.variantsGenerated})`)
   console.table(result.timings.map((t) => ({ step: t.label, duration: formatMs(t.ms) })))
 

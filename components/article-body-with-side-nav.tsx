@@ -20,11 +20,6 @@ export function ArticleBodyWithSideNav({ html, sourceHost, primaryImageUrl }: { 
   const [active, setActive] = useState(0)
   const contentBoundsStyle = { maxWidth: 'var(--article-content-max)' } as CSSProperties
 
-  // Debug logging
-  useEffect(() => {
-    console.log('Component rendered with anchors:', anchors.length, anchors.map(a => a.id))
-  }, [anchors])
-
   // Force-smooth scrolling helpers (override if browser ignores smooth)
   const scrollToElement = (element: HTMLElement, offset = 96) => {
     // Method 1: Immediate scroll (fallback)
@@ -99,8 +94,62 @@ export function ArticleBodyWithSideNav({ html, sourceHost, primaryImageUrl }: { 
     let targets: HTMLElement[] = []
 
     const headingNodes = Array.from(root.querySelectorAll<HTMLHeadingElement>('h1, h2, h3, h4'))
+    const paragraphNodes = Array.from(root.querySelectorAll<HTMLParagraphElement>('p'))
+
+    const targetsList: HTMLElement[] = []
+
+    const takePreview = (startNode: ChildNode | null, boundary: HTMLElement | null) => {
+      const parts: string[] = []
+      let cur: ChildNode | null = startNode
+      while (cur && cur !== boundary) {
+        if (cur.nodeType === Node.ELEMENT_NODE) {
+          const el = cur as HTMLElement
+          if (/^P|UL|OL|BLOCKQUOTE|DIV$/i.test(el.tagName)) {
+            const text = el.textContent?.trim() || ''
+            if (text) parts.push(text)
+          }
+        }
+        if (parts.join(' ').length > 300) break
+        cur = cur.nextSibling
+      }
+      return parts.join(' ').slice(0, 300)
+    }
+
+    const buildTitleFromText = (text: string) => {
+      const trimmed = text.trim()
+      if (!trimmed) return 'Section'
+      const sentence = trimmed.split(/(?<=[.!?])\s+/)[0]
+      return (sentence && sentence.length >= 24 ? sentence : trimmed).slice(0, 80)
+    }
+
+    const addIntroAnchor = () => {
+      if (!paragraphNodes.length) return
+      if (!headingNodes.length) return
+      const firstHeading = headingNodes[0]
+      const introParas = paragraphNodes
+        .filter((p) => {
+          const txt = (p.textContent || '').trim()
+          if (!txt) return false
+          const relation = p.compareDocumentPosition(firstHeading)
+          return (relation & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+        })
+        .slice(0, 2)
+      if (!introParas.length) return
+      const combinedText = introParas.map((p) => (p.textContent || '').trim()).filter(Boolean)
+      if (!combinedText.length) return
+      const introTitle = buildTitleFromText(combinedText[0])
+      const baseId = introParas[0].id || slugify(introTitle || 'introduction') || 'introduction'
+      const used = seen.get(baseId) || 0
+      seen.set(baseId, used + 1)
+      const id = used === 0 ? baseId : `${baseId}-${used}`
+      introParas[0].id = id
+      targetsList.push(introParas[0])
+      const preview = combinedText.join(' ').slice(0, 300)
+      list.push({ id, title: introTitle, preview })
+    }
+
     if (headingNodes.length > 0) {
-      targets = headingNodes
+      addIntroAnchor()
       headingNodes.forEach((h, idx) => {
         const title = (h.textContent || '').trim()
         if (!title) return
@@ -108,43 +157,35 @@ export function ArticleBodyWithSideNav({ html, sourceHost, primaryImageUrl }: { 
         const used = seen.get(base) || 0
         seen.set(base, used + 1)
         const id = used === 0 ? base : `${base}-${used}`
-        h.id = id // Always set the ID, even if it already exists
-        // Build a short preview from following siblings until next heading
+        h.id = id
         const nextHeading = headingNodes[idx + 1] || null
-        const previewParts: string[] = []
-        let cur: ChildNode | null = h.nextSibling
-        while (cur && cur !== nextHeading) {
-          if (cur.nodeType === Node.ELEMENT_NODE) {
-            const el = cur as HTMLElement
-            if (/^P|UL|OL|BLOCKQUOTE|DIV$/i.test(el.tagName)) {
-              const text = el.textContent?.trim() || ''
-              if (text) previewParts.push(text)
-            }
-          }
-          if (previewParts.join(' ').length > 300) break
-          cur = cur.nextSibling
-        }
-        const preview = previewParts.join(' ').slice(0, 300)
+        const preview = takePreview(h.nextSibling, nextHeading)
         list.push({ id: h.id, title, preview })
+        targetsList.push(h)
       })
+      targets = targetsList
     } else {
       // Fallback: use representative paragraphs as sections
-      const paras = Array.from(root.querySelectorAll<HTMLParagraphElement>('p'))
       const chosen: HTMLParagraphElement[] = []
-      for (const p of paras) {
+      for (const p of paragraphNodes) {
         const text = (p.textContent || '').trim()
         if (text.length >= 80) chosen.push(p)
         if (chosen.length >= 8) break
       }
-      if (chosen.length === 0 && paras.length) {
-        chosen.push(...paras.slice(0, Math.min(5, paras.length)))
+      if (chosen.length === 0 && paragraphNodes.length) {
+        chosen.push(...paragraphNodes.slice(0, Math.min(5, paragraphNodes.length)))
       }
       targets = chosen as unknown as HTMLElement[]
       chosen.forEach((p, idx) => {
-        const title = (p.textContent || '').trim().slice(0, 80)
-        const id = p.id || `section-${idx + 1}`
-        p.id = id // Always set the ID
-        const preview = (p.textContent || '').trim().slice(0, 300)
+        const text = (p.textContent || '').trim()
+        if (!text) return
+        const title = buildTitleFromText(text)
+        const base = p.id || slugify(title)
+        const used = seen.get(base) || 0
+        seen.set(base, used + 1)
+        const id = used === 0 ? base : `${base}-${used}`
+        p.id = id
+        const preview = text.slice(0, 300)
         list.push({ id, title, preview })
       })
     }
@@ -172,7 +213,7 @@ export function ArticleBodyWithSideNav({ html, sourceHost, primaryImageUrl }: { 
       { root: null, rootMargin: '0px 0px -70% 0px', threshold: [0, 1] },
     )
 
-    targets.forEach((h) => observer.observe(h))
+  targets.forEach((h) => observer.observe(h))
     return () => observer.disconnect()
   }, [html])
 

@@ -2,7 +2,7 @@ import 'dotenv/config'
 
 import { serverClient } from '../lib/sanity'
 import { htmlToPlainText } from '../lib/integrations/util/number-preserver'
-import { extractATP } from '../lib/integrations/extractors/atp'
+import { extractArticle } from '../lib/integrations/extractors/article'
 
 async function run() {
   const id = process.argv[2]
@@ -32,20 +32,13 @@ async function run() {
   let bodyText: string | undefined
 
   try {
-    const host = new URL(url).hostname.replace(/^www\./, '')
-
-    if (host === 'atptour.com' || host.endsWith('.atptour.com')) {
-      const extracted = await extractATP(url)
-      if (!extracted?.bodyHtml) {
-        console.error(`Extractor returned no bodyHtml for ${url}`)
-        process.exit(1)
-      }
-      bodyHtml = extracted.bodyHtml
-      bodyText = extracted.bodyText || htmlToPlainText(extracted.bodyHtml)
-    } else {
-      console.error(`No extractor implemented for host: ${host}`)
+    const extracted = await extractArticle(url)
+    if (!extracted?.bodyHtml) {
+      console.error(`Extractor returned no bodyHtml for ${url}`)
       process.exit(1)
     }
+    bodyHtml = extracted.bodyHtml
+    bodyText = extracted.bodyText || htmlToPlainText(extracted.bodyHtml)
   } catch (err) {
     console.error(`Failed to extract content for ${url}`)
     console.error(err)
@@ -58,11 +51,11 @@ async function run() {
   }
 
   await serverClient
-    .patch(id)
+    .patch(doc._id)
     .set({ externalHtml: bodyHtml, externalText: bodyText || htmlToPlainText(bodyHtml) })
     .commit({ autoGenerateArrayKeys: true })
 
-  console.log(`Updated externalHtml for ${id}`)
+  console.log(`Updated externalHtml for ${doc._id}`)
 }
 
 run().catch((err) => {
