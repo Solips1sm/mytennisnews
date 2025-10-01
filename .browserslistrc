@@ -1,0 +1,21 @@
+[production]
+last 2 chrome versions
+last 2 edge versions
+last 2 firefox versions
+last 2 safari major versions
+last 2 ios_saf major versions
+not chrome < 110
+not firefox < 110
+not safari < 16
+not ios_saf < 16
+not samsung < 21
+not opera < 95
+not and_chr < 110
+not android < 110
+not op_mini all
+not ie <= 11
+
+[development]
+last 1 chrome version
+last 1 firefox version
+last 1 safari version

@@ -1,5 +1,6 @@
 "use client"
 import Link from 'next/link'
+import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -264,13 +265,16 @@ export function BlogPage({
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <div className="relative h-[400px] overflow-hidden rounded-lg shadow-lg md:h-[500px] lg:col-span-2 ring-1 ring-transparent transition-all duration-300 hover:shadow-xl hover:ring-foreground/10 dark:hover:ring-foreground/20">
           <a href={hero?.slug ? `/${hero.slug}` : (hero?.canonicalUrl || '#')} className="group block h-full">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={hero?.leadImageUrl || 'https://placehold.co/1200x600?text='}
-              alt={hero?.title || 'Featured'}
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-              loading="lazy"
-            />
+            <div className="relative h-full w-full">
+              <Image
+                src={hero?.leadImageUrl || 'https://placehold.co/1200x600?text='}
+                alt={hero?.title || 'Featured'}
+                fill
+                priority
+                sizes="(max-width: 1024px) 100vw, 66vw"
+                className="object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+            </div>
             <div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/70 to-transparent p-6 text-white">
               {hero?.tags?.[0]?.name ? (
                 <Badge className="mb-2 w-fit bg-white/20 text-white backdrop-blur-sm">{hero.tags[0].name}</Badge>

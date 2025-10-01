@@ -1,12 +1,12 @@
 import './globals.css'
 import type { Metadata, Viewport } from 'next'
-import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
 import { ensureHttpsUrl } from '@/lib/utils'
 import { uiFont, bodyFont } from './fonts'
+import Script from 'next/script'
 
 const defaultSiteFallback = 'https://www.mytennisnews.com'
 const siteUrl = ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, defaultSiteFallback) || defaultSiteFallback
@@ -149,6 +149,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${uiFont.variable} ${bodyFont.variable}`}>
       <head>
+        <link rel="preconnect" href="https://photoresources.wtatennis.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://cdn.sanity.io" crossOrigin="anonymous" />
         <Script id="organization-schema" type="application/ld+json" strategy="beforeInteractive">
           {JSON.stringify(organizationSchema)}
         </Script>

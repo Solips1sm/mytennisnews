@@ -15,6 +15,61 @@ const nextConfig = {
       'groq',
     ],
   },
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'photoresources.wtatennis.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.atptour.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'espncdn.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'a.espncdn.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'a1.espncdn.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'a2.espncdn.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'a3.espncdn.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'a4.espncdn.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.sanity.io',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'placehold.co',
+        pathname: '/**',
+      },
+    ],
+  },
   async redirects() {
     return [
       {

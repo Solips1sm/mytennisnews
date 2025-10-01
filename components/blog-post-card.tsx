@@ -1,7 +1,9 @@
 "use client"
 import React, { useRef, useState } from 'react'
+import Image from 'next/image'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { resolveSourceLogo } from '@/lib/logo-resolver'
+import { formatFriendlyDate } from '@/lib/utils'
 
 interface BlogPostCardProps {
   imageSrc: string
@@ -15,8 +17,6 @@ interface BlogPostCardProps {
   canonicalUrl?: string
   publishedAt?: string
 }
-
-import { formatFriendlyDate } from '@/lib/utils'
 
 export function BlogPostCard({ imageSrc, imageAlt, title, description, authorName, authorAvatarSrc, readTime, href, canonicalUrl, publishedAt }: BlogPostCardProps) {
   const cardRef = useRef<HTMLAnchorElement | null>(null)
@@ -47,8 +47,15 @@ export function BlogPostCard({ imageSrc, imageAlt, title, description, authorNam
         else setOrigin('right')
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={imageSrc} alt={imageAlt} width={400} height={225} className="h-48 w-full flex-shrink-0 object-cover transition-transform duration-300 group-hover:scale-105" />
+      <div className="relative h-48 w-full flex-shrink-0 overflow-hidden">
+        <Image
+          src={imageSrc || '/placeholder.svg?height=225&width=400'}
+          alt={imageAlt}
+          fill
+          sizes="(max-width: 768px) 100vw, 400px"
+          className="object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+      </div>
       <div className="relative flex flex-1 flex-col gap-2 p-4">
         <h3 className="font-ui text-lg font-semibold leading-tight">{title}</h3>
         <p className="font-ui text-sm text-muted-foreground line-clamp-3">{description}</p>
