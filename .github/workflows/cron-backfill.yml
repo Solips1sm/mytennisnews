@@ -1,0 +1,109 @@
+name: Cron Backfill
+
+on:
+  workflow_dispatch:
+    inputs:
+      attempt:
+        description: 'Chain attempt number'
+        default: '1'
+        required: false
+  repository_dispatch:
+    types: [cron-backfill]
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CRON_BACKFILL_MAX_ATTEMPTS: ${{ vars.CRON_BACKFILL_MAX_ATTEMPTS || '10' }}
+      PAYLOAD_ATTEMPT: ${{ github.event.client_payload.attempt || inputs.attempt || '1' }}
+    steps:
+      - name: Invoke backfill endpoint
+        id: call_backfill
+        env:
+          CRON_URL: ${{ secrets.CRON_BACKFILL_ENDPOINT }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ATTEMPT: ${{ env.PAYLOAD_ATTEMPT }}
+        run: |
+          set -eu
+          CRON_URL="$(printf '%s' "${CRON_URL:-}" | tr -d '\r')"
+          CRON_SECRET="$(printf '%s' "${CRON_SECRET:-}" | tr -d '\r')"
+          if [ -z "${CRON_URL:-}" ]; then
+            echo "CRON_BACKFILL_ENDPOINT secret is not set" >&2
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET secret is not set" >&2
+            exit 1
+          fi
+          printf 'Invoking backfill endpoint (attempt %s): %s\n' "$ATTEMPT" "$CRON_URL"
+          response_file="$(mktemp)"
+          http_status=$(curl --silent --show-error -L -X POST "$CRON_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{"source":"github-actions"}' \
+            --connect-timeout 10 \
+            --max-time 300 \
+            --retry 2 \
+            --retry-delay 5 \
+            --write-out '%{http_code}' \
+            --output "$response_file")
+
+          printf 'Backfill endpoint status: %s\n' "$http_status"
+          printf 'Backfill endpoint response:\n'
+          cat "$response_file"
+          printf '\n'
+
+          if [ "$http_status" -ge 400 ]; then
+            echo "Backfill endpoint returned error status" >&2
+            exit 1
+          fi
+
+          should_continue=$(jq -r '.shouldContinue // false' "$response_file")
+          should_publish=$(jq -r '.shouldTriggerPublish // false' "$response_file")
+          remaining=$(jq -r '.summary.remaining // 0' "$response_file" 2>/dev/null || echo 0)
+          timed_out=$(jq -r '.summary.timedOut // false' "$response_file" 2>/dev/null || echo false)
+          echo "should_continue=${should_continue}" >> "$GITHUB_OUTPUT"
+          echo "should_publish=${should_publish}" >> "$GITHUB_OUTPUT"
+          echo "remaining=${remaining}" >> "$GITHUB_OUTPUT"
+          echo "timed_out=${timed_out}" >> "$GITHUB_OUTPUT"
+          echo "attempt=${ATTEMPT}" >> "$GITHUB_OUTPUT"
+          rm -f "$response_file"
+      - name: Dispatch next backfill attempt
+        if: steps.call_backfill.outputs.should_continue == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MAX_ATTEMPTS: ${{ env.CRON_BACKFILL_MAX_ATTEMPTS }}
+        run: |
+          set -eu
+          current_attempt=${{ steps.call_backfill.outputs.attempt || '1' }}
+          attempt=$((current_attempt + 1))
+          max_attempts=${MAX_ATTEMPTS}
+          if [ "$attempt" -gt "$max_attempts" ]; then
+            echo "Reached max attempts ($max_attempts); not scheduling another backfill run"
+            exit 0
+          fi
+          payload=$(jq -n \
+            --arg origin "backfill" \
+            --arg attempt_str "$attempt" \
+            --arg remaining_str "${{ steps.call_backfill.outputs.remaining || '0' }}" \
+            '{event_type: "cron-backfill", client_payload: {origin: $origin, attempt: ($attempt_str|tonumber), remaining: ($remaining_str|tonumber)}}')
+          curl --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            --data "$payload"
+      - name: Dispatch publish workflow
+        if: steps.call_backfill.outputs.should_publish == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          payload=$(jq -n '{event_type: "cron-publish", client_payload: {origin: "backfill"}}')
+          curl --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            --data "$payload"

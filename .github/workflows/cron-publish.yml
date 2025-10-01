@@ -1,32 +1,33 @@
-name: Cron Sync
+name: Cron Publish
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
   workflow_dispatch:
+  repository_dispatch:
+    types: [cron-publish]
 
 jobs:
-  trigger:
+  publish:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Invoke cron cycle
+      - name: Invoke publish endpoint
+        id: call_publish
         env:
-          CRON_URL: ${{ secrets.CRON_ENDPOINT }}
+          CRON_URL: ${{ secrets.CRON_PUBLISH_ENDPOINT }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -eu
           CRON_URL="$(printf '%s' "${CRON_URL:-}" | tr -d '\r')"
           CRON_SECRET="$(printf '%s' "${CRON_SECRET:-}" | tr -d '\r')"
           if [ -z "${CRON_URL:-}" ]; then
-            echo "CRON_ENDPOINT secret is not set" >&2
+            echo "CRON_PUBLISH_ENDPOINT secret is not set" >&2
             exit 1
           fi
           if [ -z "${CRON_SECRET:-}" ]; then
             echo "CRON_SECRET secret is not set" >&2
             exit 1
           fi
-          printf 'Invoking cron endpoint: %s\n' "$CRON_URL"
+          printf 'Invoking publish endpoint: %s\n' "$CRON_URL"
           response_file="$(mktemp)"
           http_status=$(curl --silent --show-error -L -X POST "$CRON_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
@@ -39,13 +40,16 @@ jobs:
             --write-out '%{http_code}' \
             --output "$response_file")
 
-          printf 'Cron endpoint status: %s\n' "$http_status"
-          printf 'Cron endpoint response:\n'
+          printf 'Publish endpoint status: %s\n' "$http_status"
+          printf 'Publish endpoint response:\n'
           cat "$response_file"
           printf '\n'
-          rm -f "$response_file"
 
           if [ "$http_status" -ge 400 ]; then
-            echo "Cron endpoint returned error status" >&2
+            echo "Publish endpoint returned error status" >&2
             exit 1
           fi
+
+          timed_out=$(jq -r '.summary.timedOut // false' "$response_file" 2>/dev/null || echo false)
+          echo "timed_out=${timed_out}" >> "$GITHUB_OUTPUT"
+          rm -f "$response_file"

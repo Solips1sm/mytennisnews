@@ -303,59 +303,74 @@ The script also clears matching entries in the Prisma ingestion ledger so future
 
 ## Production Cron Workflow
 
-For a dedicated production worker, use the bundled cycle script or the hosted API route to orchestrate ingestion, AI generation, and publishing:
+The scheduling pipeline now runs as three focused stages so each stays well under the 300 s Vercel timeout:
+
+1. **Ingest** (`/api/cron-ingest`) — pull feeds, dedupe against the Prisma ledger, and create/update Sanity drafts.
+2. **Backfill** (`/api/cron-backfill`) — run the AI pipeline for a single draft at a time and report the remaining backlog.
+3. **Publish** (`/api/cron-publish`) — promote any review-ready drafts to published.
+
+Each stage can be executed locally:
 
 ```pwsh
-npm run cron:cycle
+# Step 1: ingest feeds
+npm run cron-ingest
+
+# Step 2: backfill one draft at a time
+npm run cron-backfill
+
+# Step 3: promote review-ready drafts
+npm run cron-publish
 ```
 
-Hosted endpoint (guarded by `CRON_SECRET`): `POST https://<your-domain>/api/cron-cycle`
+Every script honours shared settings:
 
-Each run performs three phases:
+- `CRON_SECRET` — bearer token required by the hosted API routes.
+- `CRON_FEEDS` — comma-separated presets resolved during ingest (default `espn,atp,wta`).
+- `CRON_INGEST_TIMEOUT_MS`, `CRON_BACKFILL_TIMEOUT_MS`, `CRON_PUBLISH_TIMEOUT_MS` — per-stage time budgets (default 240 000 ms ingestion/backfill, 120 000 ms publish). Values are capped below Vercel’s 300 s limit.
+- `CRON_STAGE_TIMEOUT_MS` — optional umbrella timeout applied when a stage-specific value is not set.
+- `CRON_BACKFILL_LIMIT` / `CRON_AI_LIMIT` — max drafts processed per backfill invocation (defaults to `1` for the GitHub workflow).
+- `CRON_BACKFILL_CONCURRENCY` / `CRON_AI_CONCURRENCY` — maximum concurrent generations (defaults to `1`).
+- `CRON_PUBLISH_DRY_RUN` — when `true`, publish runs without mutating Sanity (useful for smoke tests).
+- Standard Sanity + database env vars (`SANITY_*`, `DATABASE_URL`, `GROK_API_KEY`/`OPENAI_API_KEY`).
 
-1. **Ingest feeds**: executes the configured presets, deduplicating against the Prisma ingestion ledger so only new items are parsed.
-2. **AI backfill**: runs the OpenAI pipeline for articles missing `aiFinal.body`, applying source-aware variant counts (ATP/WTA → 3 variants, ESPN → 4, default → 5).
-3. **Auto-publish**: copies drafts with populated AI bodies into published Sanity documents and sets their `status` to `published`.
+### Hosted endpoints
 
-Environment toggles:
+All three stages expose guarded API routes (set `CRON_SECRET` in Vercel):
 
-- `CRON_SECRET` — required when calling `/api/cron-cycle` (send as `Authorization: Bearer <CRON_SECRET>` or `?secret=` query string).
-- `CRON_FEEDS` — comma-separated preset keys (default `espn,atp,wta`).
-- `CRON_AI_CONCURRENCY` — max concurrent AI generations (default `2`).
-- Standard Sanity tokens and `GROK_API_KEY` must be available in the environment (optionally keep `OPENAI_API_KEY` for fallback).
+- `POST https://<your-domain>/api/cron-ingest`
+- `POST https://<your-domain>/api/cron-backfill`
+- `POST https://<your-domain>/api/cron-publish`
 
-Example crontab entry (every 30 minutes):
+Each returns a JSON payload with timing data and a flag to inform the next GitHub Action (for example, `shouldTriggerBackfill`, `shouldContinue`, `shouldTriggerPublish`).
 
-```cron
-*/30 * * * * cd /srv/mytennisnews && /usr/bin/env NODE_ENV=production npm run cron:cycle >> /var/log/mytennisnews-cron.log 2>&1
-```
+### GitHub Actions scheduler (free tier)
 
-Example Vercel Scheduled Function (every 30 minutes):
+Three workflows orchestrate the pipeline from GitHub-hosted runners:
 
-```json
-{
-	"schedule": "*/30 * * * *",
-	"endpoint": "https://<your-domain>/api/cron-cycle",
-	"headers": {
-		"Authorization": "Bearer <CRON_SECRET>"
-	}
-}
-```
+| Workflow | File | Trigger | Secrets needed |
+| --- | --- | --- | --- |
+| Ingest | `.github/workflows/cron-ingest.yml` | `*/30 * * * *` (UTC) + manual | `CRON_INGEST_ENDPOINT`, `CRON_SECRET` |
+| Backfill | `.github/workflows/cron-backfill.yml` | `repository_dispatch` (ingest) + manual | `CRON_BACKFILL_ENDPOINT`, `CRON_SECRET` |
+| Publish | `.github/workflows/cron-publish.yml` | `repository_dispatch` (backfill) + manual | `CRON_PUBLISH_ENDPOINT`, `CRON_SECRET` |
 
-#### GitHub Actions Scheduler (free alternative)
-
-The repo includes `.github/workflows/cron-sync.yml`, which hits the hosted cron endpoint every 30 minutes from a GitHub-hosted runner. To enable it:
+Configuration steps:
 
 1. Open **GitHub → Settings → Secrets and variables → Actions**.
 2. Add repository secrets:
-   - `CRON_ENDPOINT` – the production URL for `POST https://<your-domain>/api/cron-cycle`.
-   - `CRON_SECRET` – the same bearer token configured in Vercel (`CRON_SECRET`).
-3. Optionally adjust the cron cadence by editing the workflow `cron` expression (defaults to `*/30 * * * *`, UTC).
-4. Trigger a manual run via the **Actions → Cron Sync → Run workflow** button to confirm the setup. Check the job logs for a `200` response from the endpoint.
+	- `CRON_SECRET` — same bearer token used in Vercel.
+	- `CRON_INGEST_ENDPOINT` — production URL for `POST /api/cron-ingest` (use the canonical domain, e.g. `https://www.mytennisnews.com/api/cron-ingest`).
+	- `CRON_BACKFILL_ENDPOINT` — production URL for `POST /api/cron-backfill`.
+	- `CRON_PUBLISH_ENDPOINT` — production URL for `POST /api/cron-publish`.
+3. (Optional) Create repository variables:
+	- `CRON_BACKFILL_MAX_ATTEMPTS` — cap chained backfill retries (defaults to `10`).
+4. The ingest workflow runs every 30 minutes. When it reports new drafts, it dispatches the backfill workflow. Backfill processes one draft, dispatches the publish workflow, and re-queues itself until the backlog is clear or the attempt cap is reached.
+5. Inspect results in **Actions → Cron Ingest / Cron Backfill / Cron Publish**. Each run logs the HTTP status and JSON summary returned by the corresponding endpoint.
 
-The job fails fast if secrets are missing and uses `curl` with a 60-second timeout. GitHub Actions’ free tier covers this lightweight schedule for public repositories (and private repos within the monthly minute allowance). Make sure the production deployment exposes the cron route and shares env vars (`CRON_SECRET`, Sanity tokens, DB URL) so each run mirrors terraform.
+Because every stage is bounded by its own timeout, the combined orchestration stays within GitHub’s 10 minute job window while respecting Vercel’s 300 s limit for each request.
 
-The public site already uses the `*_PUBLISHED` GROQ queries whenever `NEXT_PUBLIC_PREVIEW_MODE` is false, so only published articles surface in production.
+> Tip: you can still run the original all-in-one pipeline via `npm run cron:cycle` or `POST /api/cron-cycle` for manual catch-up jobs, but the scheduled workflows should rely on the three-stage sequence above.
+
+The public site continues to use published-only GROQ queries (`*_PUBLISHED`) whenever `NEXT_PUBLIC_PREVIEW_MODE` is `false`, so drafts never leak to readers.
 
 ### Tagged RSS Provider & Multiple Feed Types
 

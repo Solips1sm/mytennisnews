@@ -66,17 +66,18 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
       url: `${baseUrl}/favicon.ico`,
     },
   }
-  const typedItems = items as HomeArticle[]
-  const structuredArticles = typedItems.slice(0, 20).map((article: HomeArticle, index) => {
-    const slugUrl = article.slug ? `${baseUrl}/${article.slug}` : undefined
-    const canonical = article.canonicalUrl || slugUrl
+  const typedItems = items as Array<Record<string, any>>
+  const structuredArticles = typedItems.slice(0, 20).map((article, index) => {
+    const slug = article.slug as string | undefined
+    const slugUrl = slug ? `${baseUrl}/${slug}` : undefined
+    const canonical = (article.canonicalUrl as string | undefined) || slugUrl
     const leadImage = (article as any)?.leadImageUrl as string | undefined
     return {
       '@type': 'NewsArticle',
       position: index + 1,
-      headline: article.title,
-      description: article.excerpt,
-      datePublished: article.publishedAt,
+      headline: article.title as string,
+      description: article.excerpt as string | undefined,
+      datePublished: article.publishedAt as string | undefined,
       url: canonical,
       mainEntityOfPage: canonical,
       image: leadImage ? [leadImage] : undefined,
@@ -84,8 +85,8 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
       author: article.source?.name
         ? {
             '@type': 'Organization',
-            name: article.source.name,
-            url: article.source.url,
+            name: article.source.name as string,
+            url: article.source.url as string | undefined,
           }
         : undefined,
     }

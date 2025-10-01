@@ -1,0 +1,75 @@
+name: Cron Ingest
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Invoke ingest endpoint
+        id: call_ingest
+        env:
+          CRON_URL: ${{ secrets.CRON_INGEST_ENDPOINT }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -eu
+          CRON_URL="$(printf '%s' "${CRON_URL:-}" | tr -d '\r')"
+          CRON_SECRET="$(printf '%s' "${CRON_SECRET:-}" | tr -d '\r')"
+          if [ -z "${CRON_URL:-}" ]; then
+            echo "CRON_INGEST_ENDPOINT secret is not set" >&2
+            exit 1
+          fi
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET secret is not set" >&2
+            exit 1
+          fi
+          printf 'Invoking ingest endpoint: %s\n' "$CRON_URL"
+          response_file="$(mktemp)"
+          http_status=$(curl --silent --show-error -L -X POST "$CRON_URL" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            --data '{"source":"github-actions"}' \
+            --connect-timeout 10 \
+            --max-time 300 \
+            --retry 2 \
+            --retry-delay 5 \
+            --write-out '%{http_code}' \
+            --output "$response_file")
+
+          printf 'Ingest endpoint status: %s\n' "$http_status"
+          printf 'Ingest endpoint response:\n'
+          cat "$response_file"
+          printf '\n'
+
+          if [ "$http_status" -ge 400 ]; then
+            echo "Ingest endpoint returned error status" >&2
+            exit 1
+          fi
+
+          should_backfill=$(jq -r '.shouldTriggerBackfill // false' "$response_file")
+          created=$(jq -r '.summary.summary.totals.created // 0' "$response_file" 2>/dev/null || echo 0)
+          timed_out=$(jq -r '.summary.timedOut // false' "$response_file")
+          echo "should_backfill=${should_backfill}" >> "$GITHUB_OUTPUT"
+          echo "articles_created=${created}" >> "$GITHUB_OUTPUT"
+          echo "timed_out=${timed_out}" >> "$GITHUB_OUTPUT"
+          rm -f "$response_file"
+      - name: Dispatch backfill workflow
+        if: steps.call_ingest.outputs.should_backfill == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          payload=$(jq -n \
+            --arg origin "ingest" \
+            --argjson created "${{ steps.call_ingest.outputs.articles_created || 0 }}" \
+            '{event_type: "cron-backfill", client_payload: {origin: $origin, created: $created, attempt: 1}}')
+          curl --silent --show-error -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/dispatches \
+            --data "$payload"
