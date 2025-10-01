@@ -342,6 +342,19 @@ Example Vercel Scheduled Function (every 30 minutes):
 }
 ```
 
+#### GitHub Actions Scheduler (free alternative)
+
+The repo includes `.github/workflows/cron-sync.yml`, which hits the hosted cron endpoint every 30 minutes from a GitHub-hosted runner. To enable it:
+
+1. Open **GitHub → Settings → Secrets and variables → Actions**.
+2. Add repository secrets:
+   - `CRON_ENDPOINT` – the production URL for `POST https://<your-domain>/api/cron-cycle`.
+   - `CRON_SECRET` – the same bearer token configured in Vercel (`CRON_SECRET`).
+3. Optionally adjust the cron cadence by editing the workflow `cron` expression (defaults to `*/30 * * * *`, UTC).
+4. Trigger a manual run via the **Actions → Cron Sync → Run workflow** button to confirm the setup. Check the job logs for a `200` response from the endpoint.
+
+The job fails fast if secrets are missing and uses `curl` with a 60-second timeout. GitHub Actions’ free tier covers this lightweight schedule for public repositories (and private repos within the monthly minute allowance). Make sure the production deployment exposes the cron route and shares env vars (`CRON_SECRET`, Sanity tokens, DB URL) so each run mirrors terraform.
+
 The public site already uses the `*_PUBLISHED` GROQ queries whenever `NEXT_PUBLIC_PREVIEW_MODE` is false, so only published articles surface in production.
 
 ### Tagged RSS Provider & Multiple Feed Types
