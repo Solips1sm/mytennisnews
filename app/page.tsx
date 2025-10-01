@@ -1,6 +1,7 @@
 import Script from 'next/script'
 import { getClient } from '@/lib/sanity'
 import { ARTICLES_PAGINATED, ARTICLES_PAGINATED_PUBLISHED } from '@/lib/queries'
+import { ensureHttpsUrl } from '@/lib/utils'
 import { BlogPage } from '@/components/blog-page'
 import { HeroSubscribe } from '@/components/hero-subscribe'
 
@@ -12,6 +13,7 @@ type HomeArticle = {
   excerpt?: string
   canonicalUrl?: string
   publishedAt?: string
+  updatedAt?: string
   source?: { name?: string; url?: string }
   leadImageUrl?: string
   tags?: Tag[]
@@ -56,32 +58,46 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
   if (month) queryParams.month = month
   if (normalizedPageSizeParam) queryParams.pageSize = normalizedPageSizeParam
 
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://mytennisnews.com'
+  const baseUrl =
+    ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, 'https://www.mytennisnews.com') ||
+    'https://www.mytennisnews.com'
+  const baseOrigin = baseUrl.replace(/\/$/, '')
+  const organizationId = `${baseOrigin}#organization`
+  const websiteId = `${baseOrigin}#website`
+  const homepageId = `${baseOrigin}#collection-home`
   const publisher = {
-    '@type': 'Organization',
+    '@type': 'NewsMediaOrganization',
+    '@id': organizationId,
     name: 'MyTennisNews',
-    url: baseUrl,
+    url: `${baseOrigin}/`,
+    inLanguage: 'en-US',
     logo: {
       '@type': 'ImageObject',
-      url: `${baseUrl}/favicon.ico`,
+      url: `${baseOrigin}/android-chrome-512x512.png`,
     },
   }
-  const typedItems = items as Array<Record<string, any>>
+  const typedItems = items as HomeArticle[]
   const structuredArticles = typedItems.slice(0, 20).map((article, index) => {
-    const slug = article.slug as string | undefined
-    const slugUrl = slug ? `${baseUrl}/${slug}` : undefined
-    const canonical = (article.canonicalUrl as string | undefined) || slugUrl
-    const leadImage = (article as any)?.leadImageUrl as string | undefined
+    const slug = article.slug
+    const slugUrl = slug ? `${baseOrigin}/${slug}` : undefined
+    const canonical = ensureHttpsUrl(article.canonicalUrl, slugUrl)
+    const leadImage = ensureHttpsUrl(article.leadImageUrl)
+    const updatedAt = article.updatedAt
+    const tags = article.tags?.map((tag) => tag.name).filter(Boolean)
     return {
       '@type': 'NewsArticle',
+      '@id': canonical ? `${canonical}#news` : undefined,
       position: index + 1,
       headline: article.title as string,
       description: article.excerpt as string | undefined,
       datePublished: article.publishedAt as string | undefined,
+      dateModified: updatedAt || (article.publishedAt as string | undefined),
       url: canonical,
       mainEntityOfPage: canonical,
       image: leadImage ? [leadImage] : undefined,
       publisher,
+      articleSection: tags && tags.length ? tags[0] : undefined,
+      keywords: tags,
       author: article.source?.name
         ? {
             '@type': 'Organization',
@@ -94,16 +110,25 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
   const homepageSchema = {
     '@context': 'https://schema.org',
     '@type': 'CollectionPage',
-    name: 'MyTennisNews — curated tennis coverage',
-    description: 'Daily tennis coverage, curated from trusted outlets with context and analysis.',
-    isPartOf: {
-      '@type': 'WebSite',
-      name: 'MyTennisNews',
-      url: baseUrl,
+    '@id': homepageId,
+    url: `${baseOrigin}/`,
+    name: 'MyTennisNews — curated tennis stories for the global community',
+    description: 'Curated tennis news, live context, and personal stories serving tennis fans everywhere.',
+    inLanguage: 'en-US',
+    about: ['Tennis', 'ATP Tour', 'WTA Tour', 'Grand Slams'],
+    audience: {
+      '@type': 'Audience',
+      audienceType: 'Tennis Enthusiasts',
     },
-    publisher,
+    isPartOf: {
+      '@id': websiteId,
+    },
+    publisher: {
+      '@id': organizationId,
+    },
     mainEntity: {
       '@type': 'ItemList',
+      itemListOrder: 'https://schema.org/ItemListOrderDescending',
       itemListElement: structuredArticles
         .filter((article) => Boolean(article.url))
         .map((article, index) => ({
@@ -115,10 +140,25 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
     },
   }
 
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    '@id': websiteId,
+    url: `${baseOrigin}/`,
+    name: 'MyTennisNews',
+    inLanguage: 'en-US',
+    description: 'MyTennisNews connects the tennis community with daily coverage and context.',
+    publisher: {
+      '@id': organizationId,
+    },
+  }
+
+  const homepageStructuredData = [websiteSchema, homepageSchema]
+
   return (
     <section className="space-y-2 md:space-y-4 2xl:space-y-6">
       <Script id="homepage-schema" type="application/ld+json">
-        {JSON.stringify(homepageSchema)}
+        {JSON.stringify(homepageStructuredData)}
       </Script>
       <HeroSubscribe />
       <BlogPage

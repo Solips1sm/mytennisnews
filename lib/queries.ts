@@ -38,6 +38,7 @@ export const ARTICLE_BY_SLUG = groq`
   mediaCredits,
   canonicalUrl,
   publishedAt,
+  "updatedAt": _updatedAt,
   authors,
   timestampText,
   "aiBody": aiFinal.body,
@@ -58,6 +59,7 @@ export const ARTICLE_BY_SLUG_PUBLISHED = groq`
   mediaCredits,
   canonicalUrl,
   publishedAt,
+  "updatedAt": _updatedAt,
   authors,
   timestampText,
   "aiBody": aiFinal.body,
@@ -77,6 +79,7 @@ export const ARTICLES_PAGINATED = groq`
       leadImageUrl,
       canonicalUrl,
       publishedAt,
+      "updatedAt": _updatedAt,
       source->{name, url},
       tags[]->{_id, name, "slug": slug.current}
     },
@@ -94,6 +97,7 @@ export const ARTICLES_PAGINATED_PUBLISHED = groq`
       leadImageUrl,
       canonicalUrl,
       publishedAt,
+      "updatedAt": _updatedAt,
       source->{name, url},
       tags[]->{_id, name, "slug": slug.current}
     },

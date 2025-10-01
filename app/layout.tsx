@@ -1,18 +1,27 @@
 import './globals.css'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
+import { ensureHttpsUrl } from '@/lib/utils'
 import { uiFont, bodyFont } from './fonts'
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || 'https://mytennisnews.com'
+const defaultSiteFallback = 'https://www.mytennisnews.com'
+const siteUrl = ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, defaultSiteFallback) || defaultSiteFallback
 const siteName = 'MyTennisNews'
+const siteOrigin = siteUrl.replace(/\/$/, '')
 const defaultTitle = 'MyTennisNews — Tennis news for the global community'
 const defaultDescription =
   'MyTennisNews is a digital-first tennis news platform bringing stories, live context, and personal coverage to the global tennis community.'
-const logoUrl = `${siteUrl}/android-chrome-512x512.png`
+const logoUrl = `${siteOrigin}/android-chrome-512x512.png`
+const organizationId = `${siteOrigin}#organization`
+
+const organizationSameAs = (process.env.NEXT_PUBLIC_ORG_SAME_AS || '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter((value) => value.length > 0)
 
 const verificationOther: Record<string, string> = {}
 if (process.env.NEXT_PUBLIC_AHREFS_VERIFICATION) {
@@ -24,10 +33,10 @@ if (process.env.NEXT_PUBLIC_BING_VERIFICATION) {
 const verificationMeta = Object.keys(verificationOther).length ? { other: verificationOther } : undefined
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
+  metadataBase: new URL(`${siteOrigin}/`),
   title: {
     default: defaultTitle,
-    template: 'MyTennisNews',
+    template: '%s | MyTennisNews',
   },
   description: defaultDescription,
   applicationName: siteName,
@@ -44,18 +53,18 @@ export const metadata: Metadata = {
   creator: 'MyTennisNews Editorial',
   publisher: 'MyTennisNews Media Group',
   alternates: {
-    canonical: siteUrl,
+    canonical: siteOrigin,
   },
   openGraph: {
     type: 'website',
-    url: siteUrl,
+    url: siteOrigin,
     siteName,
     title: defaultTitle,
     description: defaultDescription,
     locale: 'en_US',
     images: [
       {
-        url: `${siteUrl}/og`,
+        url: `${siteOrigin}/og`,
         width: 1200,
         height: 630,
         alt: `${siteName} — Tennis news for the global community`,
@@ -66,7 +75,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: defaultTitle,
     description: defaultDescription,
-    images: [`${siteUrl}/og`],
+    images: [`${siteOrigin}/og`],
   },
   robots: {
     index: true,
@@ -92,23 +101,27 @@ export const metadata: Metadata = {
     apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
   },
   manifest: '/site.webmanifest',
-  themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
-    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
-  ],
   other: {
     'rating': 'general',
   },
 }
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#ffffff' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
+  ],
+}
+
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID
 
-const organizationSchema = {
+const organizationSchema: Record<string, unknown> = {
   '@context': 'https://schema.org',
   '@type': 'NewsMediaOrganization',
+  '@id': organizationId,
   name: siteName,
   alternateName: defaultTitle,
-  url: siteUrl,
+  url: `${siteOrigin}/`,
   logo: {
     '@type': 'ImageObject',
     url: logoUrl,
@@ -120,12 +133,16 @@ const organizationSchema = {
     name: 'Global',
   },
   inLanguage: 'en-US',
-  publishingPrinciples: siteUrl,
+  publishingPrinciples: `${siteOrigin}/`,
   knowsAbout: ['Tennis', 'Grand Slams', 'ATP Tour', 'WTA Tour', 'Tennis Rankings', 'Tennis Community', 'Tennis Analytics'],
   audience: {
     '@type': 'Audience',
     audienceType: 'Tennis Enthusiasts',
   },
+}
+
+if (organizationSameAs.length > 0) {
+  organizationSchema.sameAs = organizationSameAs
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

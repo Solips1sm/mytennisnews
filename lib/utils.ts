@@ -11,6 +11,40 @@ export function estimateReadTime(text: string): string {
   return `${minutes} min`
 }
 
+const protocolRegex = /^[a-zA-Z][a-zA-Z\d+\-.]*:/
+
+export function ensureHttpsUrl(input?: string | null, fallback?: string): string | undefined {
+  const candidate = (input || '').trim()
+  if (!candidate) {
+    return fallback ? ensureHttpsUrl(fallback) : undefined
+  }
+
+  try {
+    const hasProtocol = protocolRegex.test(candidate)
+    const url = new URL(hasProtocol ? candidate : `https://${candidate}`)
+    url.protocol = 'https:'
+    if (!url.hostname) {
+      return fallback ? ensureHttpsUrl(fallback) : undefined
+    }
+    // Normalize default port 443 away
+    if (url.port === '443') {
+      url.port = ''
+    }
+    // Remove trailing slash for canonical usage
+    url.pathname = url.pathname || '/'
+    if (url.pathname !== '/') {
+      url.pathname = url.pathname.replace(/\/{2,}/g, '/').replace(/\/$/, '')
+    }
+    const serialized = url.toString()
+    if (url.pathname !== '/' && serialized.endsWith('/')) {
+      return serialized.slice(0, -1)
+    }
+    return serialized
+  } catch {
+    return fallback ? ensureHttpsUrl(fallback) : undefined
+  }
+}
+
 export function getFaviconUrl(urlStr?: string): string | undefined {
   if (!urlStr) return undefined
   try {

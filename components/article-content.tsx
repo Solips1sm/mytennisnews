@@ -34,7 +34,7 @@ type Article = {
 }
 
 export function ArticleContent({ article }: { article: Article }) {
-  const articleStyle = { '--article-content-max': 'clamp(75%, 82%, 1200px)' } as CSSProperties
+  const articleStyle = { '--article-content-max': 'clamp(85%, 88%, 1200px)' } as CSSProperties
   const contentBoundsStyle = { maxWidth: 'var(--article-content-max)' } as CSSProperties
   const hostname = (() => {
     try {
@@ -56,7 +56,7 @@ export function ArticleContent({ article }: { article: Article }) {
       }).format(new Date(article.publishedAt))
     : undefined
   return (
-    <article className="relative mx-auto w-full max-w-[1335px] px-4 sm:px-6 lg:px-8" style={articleStyle}>
+  <article className="relative mx-auto w-full max-w-[1335px] px-3 sm:px-4 lg:px-6 xl:px-8" style={articleStyle}>
       <header className="mb-6">
         <h1 className="text-3xl font-ui font-semibold tracking-tight sm:text-4xl">{article.title}</h1>
   <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">

@@ -102,7 +102,7 @@ export function ReactionButtons({ articleId }: Props) {
   }
 
   return (
-    <div className="mt-8 flex items-center gap-3 text-sm">
+  <div className="flex items-center gap-3 text-sm">
       <button
         type="button"
         onClick={() => onReact('like')}
