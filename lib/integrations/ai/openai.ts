@@ -59,6 +59,7 @@ Direction conventions: prefer "inside-in", "inside-out", "crosscourt", and "down
 
 Structure rules:
 • Use two or three <h2> subheads after the opener; each is 4–8 words, written in sentence case (only proper nouns capitalized), and previews the emotional or tactical pivot that follows.
+• Wrap every narrative block in a <p> tag—no loose text nodes or generic wrappers for prose. Keep tags properly closed and avoid orphaned inline markup.
 • Keep paragraphs grouped beneath the relevant subhead; each paragraph is compact, propulsive, and never reads like a checklist or blueprint.
 • Quotes (when derived from source) use <div class="ext-quote"><blockquote>...</blockquote></div> and appear after paragraph 2.
 • Do not fabricate social embeds. Place provided embed tokens on their own paragraph and never wrap commentary in <div class="ext-social"> unless the embed itself requires that wrapper.
@@ -544,6 +545,124 @@ function applyLinkReferences(doc: Document, root: HTMLElement, references: LinkR
   cleanupBareUrls(doc, root, normalizedRefs)
 }
 
+const INLINE_ELEMENT_TAGS = new Set([
+  'a',
+  'abbr',
+  'b',
+  'bdi',
+  'bdo',
+  'cite',
+  'code',
+  'del',
+  'dfn',
+  'em',
+  'i',
+  'img',
+  'ins',
+  'kbd',
+  'label',
+  'mark',
+  'q',
+  's',
+  'samp',
+  'small',
+  'span',
+  'strong',
+  'sub',
+  'sup',
+  'time',
+  'u',
+  'var',
+  'wbr',
+])
+
+const PARAGRAPH_CONTAINER_TAGS = [
+  'div',
+  'section',
+  'article',
+  'main',
+  'aside',
+  'blockquote',
+  'li',
+  'dd',
+  'dt',
+  'td',
+  'th',
+  'header',
+  'footer',
+  'nav',
+  'body',
+]
+
+const PARAGRAPH_SKIP_TAGS = new Set(['p', 'pre', 'code', 'style', 'script', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'ul', 'ol'])
+
+function enforceParagraphStructure(root: HTMLElement) {
+  const doc = root.ownerDocument
+  const selector = PARAGRAPH_CONTAINER_TAGS.join(',')
+  const containers = new Set<HTMLElement>()
+  containers.add(root)
+  if (selector) {
+    root.querySelectorAll(selector).forEach((el) => {
+      containers.add(el as HTMLElement)
+    })
+  }
+
+  containers.forEach((container) => {
+    const tag = (container.tagName || '').toLowerCase()
+    if (tag && PARAGRAPH_SKIP_TAGS.has(tag)) return
+
+    let currentPara: HTMLParagraphElement | null = null
+    const ensureParagraph = (reference: Node): HTMLParagraphElement => {
+      if (currentPara && currentPara.isConnected && currentPara.parentElement === container) {
+        return currentPara
+      }
+      const para = doc.createElement('p')
+      container.insertBefore(para, reference)
+      currentPara = para
+      return para
+    }
+    const flushParagraph = () => {
+      if (!currentPara) return
+      const textContent = currentPara.textContent?.replace(/[\s\u00A0]+/g, '') ?? ''
+      if (!textContent && !currentPara.querySelector('img,figure,iframe,video,svg,br,span,strong,em,a')) {
+        currentPara.remove()
+      }
+      currentPara = null
+    }
+
+    Array.from(container.childNodes).forEach((node) => {
+      if (node.nodeType === doc.TEXT_NODE) {
+        const value = node.nodeValue || ''
+        if (!value.trim()) {
+          if (currentPara) {
+            currentPara.appendChild(node)
+          } else {
+            container.removeChild(node)
+          }
+          return
+        }
+        const para = currentPara ?? ensureParagraph(node)
+        para.appendChild(node)
+        return
+      }
+      if (node.nodeType !== doc.ELEMENT_NODE) {
+        container.removeChild(node)
+        return
+      }
+      const el = node as HTMLElement
+      const childTag = el.tagName.toLowerCase()
+      if (INLINE_ELEMENT_TAGS.has(childTag) || childTag === 'br') {
+        const para = currentPara ?? ensureParagraph(el)
+        para.appendChild(el)
+        return
+      }
+      flushParagraph()
+    })
+
+    flushParagraph()
+  })
+}
+
 function pruneEmptyNodes(root: HTMLElement) {
   const blockTags = new Set(['figure', 'blockquote', 'div', 'iframe', 'video'])
   const doc = root.ownerDocument
@@ -918,9 +1037,12 @@ export class OpenAIPipeline implements AIPipelineProvider {
       const doc = dom.window.document
       const root = doc.querySelector('div[data-root="root"]') as HTMLElement | null
       if (!root) return htmlWithMedia.trim()
+      enforceParagraphStructure(root)
       pruneEmptyNodes(root)
       stripMisplacedSocialWrappers(root)
+      enforceParagraphStructure(root)
       ensureSectionHeadings(root)
+      enforceParagraphStructure(root)
       result = root.innerHTML.trim()
     } catch {
       result = htmlWithMedia.trim()
@@ -1099,13 +1221,14 @@ export class OpenAIPipeline implements AIPipelineProvider {
         ? 'Synthesize the strongest final article: merge the best insights, remove duplicate phrasing, keep unique player mentions once per paragraph, and resolve tone/tense conflicts.'
         : undefined,
       `Title & excerpt: craft a headline that feels like a human tennis feature (no gimmicky colons or ALL CAPS) and an excerpt that invites the reader in with tension or momentum—avoid repeating the opener verbatim.`,
-      `Body requirements:\n• Minimum length ${minTarget} characters.\n• Use 2–3 <h2> subheads after the opener; each is 4–8 words, in sentence case, and hints at the human or tactical pivot that follows.\n• Keep paragraphs grouped beneath those subheads; avoid bullet lists, numbered steps, or blueprint language.\n• Keep the opening paragraph free of attributions. From paragraph two onward, vary verbs (limit the exact phrase "according to" to one use).\n• Emphasize concrete tennis detail (patterns, surfaces, adjustments) while weaving in emotion, crowd energy, and context.`,
+  `Body requirements:\n• Minimum length ${minTarget} characters.\n• Use 2–3 <h2> subheads after the opener; each is 4–8 words, in sentence case, and hints at the human or tactical pivot that follows.\n• Wrap every paragraph-worthy block in <p>...</p> tags—no raw text directly inside the root or generic <div> wrappers for prose.\n• Keep paragraphs grouped beneath those subheads; avoid bullet lists, numbered steps, or blueprint language.\n• Keep the opening paragraph free of attributions. From paragraph two onward, vary verbs (limit the exact phrase "according to" to one use).\n• Emphasize concrete tennis detail (patterns, surfaces, adjustments) while weaving in emotion, crowd energy, and context.`,
       `Reference handling:\n• Mention each subject once with its provided wording, then prefer pronouns or descriptors.\n• Integrate links naturally within sentences; no trailing "Source" blocks or link lists.\n• Never repeat the same full name back-to-back or create doubled wording.`,
       `Link formatting: never output bare URLs, markdown links, or parentheses containing URLs. Write the subject text only; downstream formatting attaches the href.`,
       `Media handling:\n${mediaRequirement}`,
       'Narrative voice: write with the cadence of a seasoned tennis analyst on site—blend tactile imagery (light, sound, tempo) with strategic insight, and close sections with forward-looking beats rather than summaries.',
       `Language hygiene:\n• Remove emojis/hashtags.\n• Prefer "slice"/"underspin", "inside-in"/"inside-out", "down-the-line", "crosscourt", and "1–2"/"one–two" combinations.\n• Keep paragraphs concise (2–4 sentences) and never use ALL CAPS.`,
       linkRequirement,
+      'HTML hygiene: output valid HTML5 fragment with balanced tags, no Markdown fences, no self-invented wrapper elements for plain text, and never leave dangling <div> or </p> markers.',
       strategy === 'variant'
         ? 'Distinctiveness: diverge from other drafts by highlighting different match context, stats, or tactical takeaways while remaining factual.'
         : undefined,
