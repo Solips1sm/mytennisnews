@@ -29,10 +29,8 @@ jobs:
           fi
           printf 'Invoking publish endpoint: %s\n' "$CRON_URL"
           response_file="$(mktemp)"
-          http_status=$(curl --silent --show-error -L -X POST "$CRON_URL" \
+          http_status=$(curl --silent --show-error -L "$CRON_URL" \
             -H "Authorization: Bearer $CRON_SECRET" \
-            -H "Content-Type: application/json" \
-            --data '{"source":"github-actions"}' \
             --connect-timeout 10 \
             --max-time 300 \
             --retry 2 \

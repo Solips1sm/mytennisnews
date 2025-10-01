@@ -338,8 +338,8 @@ Every script honours shared settings:
 All three stages expose guarded API routes (set `CRON_SECRET` in Vercel):
 
 - `GET https://<your-domain>/api/cron-ingest`
-- `POST https://<your-domain>/api/cron-backfill`
-- `POST https://<your-domain>/api/cron-publish`
+- `GET https://<your-domain>/api/cron-backfill`
+- `GET https://<your-domain>/api/cron-publish`
 
 Each returns a JSON payload with timing data and a flag to inform the next GitHub Action (for example, `shouldTriggerBackfill`, `shouldContinue`, `shouldTriggerPublish`).
 
@@ -359,8 +359,8 @@ Configuration steps:
 2. Add repository secrets:
 	- `CRON_SECRET` — same bearer token used in Vercel.
 	- `CRON_INGEST_ENDPOINT` — production URL for `/api/cron-ingest` (use the canonical domain, e.g. `https://www.mytennisnews.com/api/cron-ingest`). The workflow uses `GET` to avoid platform 405s, but the route also accepts `POST` for manual callers.
-	- `CRON_BACKFILL_ENDPOINT` — production URL for `POST /api/cron-backfill`.
-	- `CRON_PUBLISH_ENDPOINT` — production URL for `POST /api/cron-publish`.
+	- `CRON_BACKFILL_ENDPOINT` — production URL for `/api/cron-backfill`. Workflows call it with `GET`, but the route also accepts `POST` if you trigger it manually.
+	- `CRON_PUBLISH_ENDPOINT` — production URL for `/api/cron-publish`. Workflows call it with `GET`, but the route also accepts `POST` if you trigger it manually.
 3. (Optional) Create repository variables:
 	- `CRON_BACKFILL_MAX_ATTEMPTS` — cap chained backfill retries (defaults to `10`).
 4. The ingest workflow runs every 30 minutes. When it reports new drafts, it dispatches the backfill workflow. Backfill processes one draft, dispatches the publish workflow, and re-queues itself until the backlog is clear or the attempt cap is reached.
