@@ -3,7 +3,7 @@ import Script from 'next/script'
 import { notFound } from 'next/navigation'
 import { getClient } from '@/lib/sanity'
 import { ARTICLE_BY_SLUG, ARTICLE_BY_SLUG_PUBLISHED } from '@/lib/queries'
-import { ensureHttpsUrl } from '@/lib/utils'
+import { ensureHttpsUrl, resolveSiteOrigin, resolveSiteUrl } from '@/lib/utils'
 import { ArticleContent } from '@/components/article-content'
 
 type Tag = { _id: string; name: string; slug?: string }
@@ -27,10 +27,9 @@ type Article = {
   timestampText?: string
 }
 
-const siteUrl =
-  ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, 'https://www.mytennisnews.com') ||
-  'https://www.mytennisnews.com'
-const siteOrigin = siteUrl.replace(/\/$/, '')
+const defaultSiteFallback = 'https://www.mytennisnews.com'
+const siteUrl = resolveSiteUrl(defaultSiteFallback)
+const siteOrigin = resolveSiteOrigin(defaultSiteFallback)
 const organizationId = `${siteOrigin}#organization`
 const isPreview = process.env.NEXT_PUBLIC_PREVIEW_MODE === 'true'
 

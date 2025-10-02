@@ -109,13 +109,18 @@ pnpm dev
 - **Secrets:** Store DB credentials only in Vercel’s Production env (`DATABASE_URL`).
 
 ### Application toggles & housekeeping
-- `NEXT_PUBLIC_APP_URL` (and `NEXT_PUBLIC_SITE_URL` for structured data) → set to `https://mytennisnews.com` in Production.
+- `NEXT_PUBLIC_APP_URL` (and `NEXT_PUBLIC_SITE_URL` for structured data) → set to `https://www.mytennisnews.com` in Production so canonical tags match the preferred host.
 - `NEXT_PUBLIC_PREVIEW_MODE` → keep `false`; preview mode is entered via `/api/preview` when needed.
 - `NEXT_PUBLIC_GOOGLE_ANALYTICS_ID` → optional; when set, Google Analytics gtag tracking loads alongside Vercel Analytics.
 - `DRY_RUN` → leave `true` globally; set to `false` only for one-off destructive scripts (`cleanup:drafts`, `purge:ledger`).
 - `INGEST_DEBUG`, `INGEST_DEBUG_SAVE_HTML` → keep `false` in Production; enable temporarily when troubleshooting extractor output locally.
 - `GROK_API_KEY` (and optional legacy `OPENAI_API_KEY`), `RESEND_API_KEY`, and other provider secrets → store in Vercel env, never in the repo.
 - Ensure Vercel Cron (or your chosen scheduler) runs with the Production env vars so ingestion, AI backfill, and publishing use the right dataset and database.
+
+### HTTP/2 and TLS setup
+- **Hosted on Vercel:** Traffic is automatically served over HTTP/2 and HTTP/3 (QUIC) when the project uses a custom domain with HTTPS. Double-check that the production deployment is connected to the `www.mytennisnews.com` CNAME and that the apex (`mytennisnews.com`) redirects via Vercel DNS so clients upgrade to HTTP/2/3 out of the box.
+- **Custom hosting:** If you run the Next.js build on your own infrastructure, terminate TLS with a reverse proxy (e.g. Vercel Edge, Cloudflare, Fastly, Nginx, or Caddy) configured with `http2`/`http3` enabled. Point the proxy at the `next start` server on an internal HTTP/1.1 port.
+- **Verification:** After deployment, confirm the protocol by visiting `https://www.mytennisnews.com` with Chrome DevTools → Network → Protocol column or `curl -I --http2 https://www.mytennisnews.com`. Any legacy HTTP/1.1 responses usually indicate a CDN/DNS misconfiguration rather than an app issue.
 
 ### Data exposure guardrails
 - Public site and API handlers already switch to published-only GROQ queries whenever preview mode is disabled, so no drafts leak to end users.

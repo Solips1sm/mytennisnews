@@ -71,3 +71,37 @@ export function formatFriendlyDate(input?: string | Date): string | undefined {
   const yy = String(d.getFullYear()).slice(-2)
   return `${dd}/${mm}/${yy}`
 }
+
+function normalizePreferredHost(candidateUrl: string, preferredUrl: string): string {
+  try {
+    const candidate = new URL(candidateUrl)
+    const preferred = new URL(preferredUrl)
+    const preferredHostname = preferred.hostname
+    const barePreferred = preferredHostname.replace(/^www\./, '')
+    const candidateHostname = candidate.hostname
+    if (preferredHostname !== barePreferred && candidateHostname === barePreferred) {
+      candidate.hostname = preferredHostname
+      candidate.port = ''
+    }
+    candidate.protocol = 'https:'
+    if (candidate.port === '443') {
+      candidate.port = ''
+    }
+    const serialized = candidate.toString()
+    return serialized.endsWith('/') ? serialized.slice(0, -1) : serialized
+  } catch {
+    return candidateUrl.endsWith('/') ? candidateUrl.slice(0, -1) : candidateUrl
+  }
+}
+
+export function resolveSiteUrl(preferredUrl = 'https://www.mytennisnews.com'): string {
+  const fallback = ensureHttpsUrl(preferredUrl) || 'https://www.mytennisnews.com'
+  const rawCandidate =
+    ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, fallback) || fallback
+  return normalizePreferredHost(rawCandidate, fallback)
+}
+
+export function resolveSiteOrigin(preferredUrl = 'https://www.mytennisnews.com'): string {
+  const url = resolveSiteUrl(preferredUrl)
+  return url.replace(/\/$/, '')
+}

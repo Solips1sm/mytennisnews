@@ -4,14 +4,14 @@ import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import { SiteHeader } from '@/components/site-header'
 import { SiteFooter } from '@/components/site-footer'
-import { ensureHttpsUrl } from '@/lib/utils'
+import { resolveSiteOrigin, resolveSiteUrl } from '@/lib/utils'
 import { uiFont, bodyFont } from './fonts'
 import Script from 'next/script'
 
 const defaultSiteFallback = 'https://www.mytennisnews.com'
-const siteUrl = ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, defaultSiteFallback) || defaultSiteFallback
+const siteUrl = resolveSiteUrl(defaultSiteFallback)
 const siteName = 'MyTennisNews'
-const siteOrigin = siteUrl.replace(/\/$/, '')
+const siteOrigin = resolveSiteOrigin(defaultSiteFallback)
 const defaultTitle = 'MyTennisNews — Tennis news for the global community'
 const defaultDescription =
   'MyTennisNews is a digital-first tennis news platform bringing stories, live context, and personal coverage to the global tennis community.'

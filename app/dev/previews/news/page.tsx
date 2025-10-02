@@ -1,8 +1,10 @@
 import { notFound } from 'next/navigation'
+import Script from 'next/script'
 import { buildDigest } from '@/lib/digest'
 import { Button } from '@/ui/button'
 import { prisma } from '@/lib/prisma'
 import { sendEmailViaResend } from '@/lib/integrations/email/resend'
+import { resolveSiteOrigin } from '@/lib/utils'
 
 export const revalidate = 0
 
@@ -13,6 +15,50 @@ export default async function DigestPreviewPage() {
   }
   const daily = await buildDigest('daily')
   const weekly = await buildDigest('weekly')
+  const siteOrigin = resolveSiteOrigin('https://www.mytennisnews.com')
+  const pageUrl = `${siteOrigin}/dev/previews/news`
+  const structuredData = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'WebPage',
+      '@id': `${pageUrl}#webpage`,
+      url: pageUrl,
+      name: 'Digest previews | MyTennisNews',
+      description: 'Internal tooling to preview and send daily or weekly tennis newsletter drafts.',
+      inLanguage: 'en-US',
+      isPartOf: {
+        '@type': 'WebSite',
+        '@id': `${siteOrigin}#website`,
+        url: `${siteOrigin}/`,
+        name: 'MyTennisNews',
+      },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      '@id': `${pageUrl}#breadcrumbs`,
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: `${siteOrigin}/`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Dev previews',
+          item: `${siteOrigin}/dev/previews`,
+        },
+        {
+          '@type': 'ListItem',
+          position: 3,
+          name: 'Digest preview',
+          item: pageUrl,
+        },
+      ],
+    },
+  ]
 
   async function sendDaily() {
     'use server'
@@ -34,6 +80,9 @@ export default async function DigestPreviewPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 space-y-8">
+      <Script id="dev-digest-schema" type="application/ld+json">
+        {JSON.stringify(structuredData)}
+      </Script>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Digest Previews</h1>
         <p className="text-sm text-muted-foreground">/dev/previews/news</p>

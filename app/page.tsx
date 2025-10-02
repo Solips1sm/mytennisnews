@@ -1,7 +1,7 @@
 import Script from 'next/script'
 import { getClient } from '@/lib/sanity'
 import { ARTICLES_PAGINATED, ARTICLES_PAGINATED_PUBLISHED } from '@/lib/queries'
-import { ensureHttpsUrl } from '@/lib/utils'
+import { ensureHttpsUrl, resolveSiteOrigin, resolveSiteUrl } from '@/lib/utils'
 import { BlogPage } from '@/components/blog-page'
 import { HeroSubscribe } from '@/components/hero-subscribe'
 
@@ -58,10 +58,8 @@ export default async function HomePage({ searchParams }: { searchParams?: Record
   if (month) queryParams.month = month
   if (normalizedPageSizeParam) queryParams.pageSize = normalizedPageSizeParam
 
-  const baseUrl =
-    ensureHttpsUrl(process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL, 'https://www.mytennisnews.com') ||
-    'https://www.mytennisnews.com'
-  const baseOrigin = baseUrl.replace(/\/$/, '')
+  const baseUrl = resolveSiteUrl('https://www.mytennisnews.com')
+  const baseOrigin = resolveSiteOrigin('https://www.mytennisnews.com')
   const organizationId = `${baseOrigin}#organization`
   const websiteId = `${baseOrigin}#website`
   const homepageId = `${baseOrigin}#collection-home`
