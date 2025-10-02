@@ -8,6 +8,9 @@ export function SubscribeForm({ size = 'sm' as 'sm' | 'default' | 'lg' }: { size
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [message, setMessage] = useState<string | null>(null)
+  const conversionSendTo = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_SEND_TO
+  const conversionValue = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_VALUE
+  const conversionCurrency = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_CURRENCY
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,6 +27,14 @@ export function SubscribeForm({ size = 'sm' as 'sm' | 'default' | 'lg' }: { size
       setStatus('success')
       setMessage('Thanks! Please check your inbox (if needed).')
       setEmail('')
+      if (typeof window !== 'undefined' && typeof window.gtag === 'function' && conversionSendTo) {
+        const valueNumber = conversionValue ? Number(conversionValue) : undefined
+        window.gtag('event', 'conversion', {
+          send_to: conversionSendTo,
+          ...(valueNumber && !Number.isNaN(valueNumber) ? { value: valueNumber } : {}),
+          ...(conversionCurrency ? { currency: conversionCurrency } : {}),
+        })
+      }
     } catch (err: any) {
       setStatus('error')
       setMessage(err?.message || 'Something went wrong')

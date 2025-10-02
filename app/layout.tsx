@@ -114,6 +114,8 @@ export const viewport: Viewport = {
 }
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID
+const GOOGLE_ADS_ID = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID
+const GTAG_IDS = Array.from(new Set([GOOGLE_ADS_ID, GA_MEASUREMENT_ID].filter((id): id is string => Boolean(id))))
 
 const organizationSchema: Record<string, unknown> = {
   '@context': 'https://schema.org',
@@ -149,9 +151,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${uiFont.variable} ${bodyFont.variable}`}>
       <head>
-      <link rel="preconnect" href="https://photoresources.wtatennis.com" />
-      <link rel="preconnect" href="https://wwww.atptour.com" />
-
+        <link rel="preconnect" href="https://photoresources.wtatennis.com" />
+        <link rel="preconnect" href="https://www.atptour.com" />
         <Script id="organization-schema" type="application/ld+json" strategy="beforeInteractive">
           {JSON.stringify(organizationSchema)}
         </Script>
@@ -175,27 +176,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteFooter />
         <Analytics />
         <SpeedInsights />
-        
-         
-        {/* {GA_MEASUREMENT_ID ? (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-              strategy="afterInteractive"
-            />
-            <Script id="ga-gtag" strategy="afterInteractive">
-              {`
-                window.dataLayer = window.dataLayer || [];
-                function gtag(){dataLayer.push(arguments);}
-                gtag('js', new Date());
-                gtag('config', '${GA_MEASUREMENT_ID}', { anonymize_ip: true });
-              `}
-            </Script>
-          </>
-        ) : null} */}
-
-      )
-        
+        {GTAG_IDS.map((id) => (
+          <Script key={`gtag-src-${id}`} src={`https://www.googletagmanager.com/gtag/js?id=${id}`} strategy="afterInteractive" />
+        ))}
+        {GTAG_IDS.length ? (
+          <Script id="gtag-init" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              ${GA_MEASUREMENT_ID ? `gtag('config', '${GA_MEASUREMENT_ID}', { anonymize_ip: true });` : ''}
+              ${GOOGLE_ADS_ID ? `gtag('config', '${GOOGLE_ADS_ID}');` : ''}
+            `}
+          </Script>
+        ) : null}
       </body>
     </html>
   )
