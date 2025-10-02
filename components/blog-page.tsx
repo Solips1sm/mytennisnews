@@ -427,7 +427,12 @@ export function BlogPage({
                 )}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={a.leadImageUrl || 'https://placehold.co/300x200?text='} alt={a.title} className="h-20 w-28 rounded object-cover" />
+                <img
+                  src={a.leadImageUrl || 'https://placehold.co/300x200?text='}
+                  alt={a.title}
+                  loading="lazy"
+                  className="h-20 w-28 rounded object-cover"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="text-xs text-muted-foreground">{a.source?.name}</div>
                   <div className="font-ui font-semibold leading-tight line-clamp-2">{a.title}</div>

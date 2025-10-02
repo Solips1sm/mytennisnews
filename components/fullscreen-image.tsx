@@ -16,6 +16,8 @@ export type FullscreenImageProps = {
   canonicalUrl?: string
   sources?: ImageSource[]
   aspectRatio?: number // e.g., 16/9 or 1.5
+  width?: number
+  height?: number
   className?: string
   imgClassName?: string
   rounded?: boolean
@@ -29,6 +31,8 @@ export function FullscreenImage({
   canonicalUrl,
   sources,
   aspectRatio,
+  width,
+  height,
   className,
   imgClassName,
   rounded = true,
@@ -137,6 +141,10 @@ export function FullscreenImage({
     }
   }, [open])
 
+  const resolvedAspectRatio = aspectRatio ?? (width && height ? width / height : 16 / 9)
+  const resolvedWidth = width ?? 1200
+  const resolvedHeight = height ?? Math.max(1, Math.round(resolvedWidth / resolvedAspectRatio))
+
   return (
     <figure className={cn('group relative', className)}>
       <div
@@ -156,7 +164,7 @@ export function FullscreenImage({
           rounded && 'rounded-md',
           'ring-1 ring-transparent transition-all duration-300 hover:ring-foreground/10 dark:hover:ring-foreground/20'
         )}
-        style={aspectRatio ? { aspectRatio: String(aspectRatio) } : undefined}
+        style={resolvedAspectRatio ? { aspectRatio: String(resolvedAspectRatio) } : undefined}
       >
         <picture>
           {sources?.map((s, idx) => (
@@ -166,6 +174,8 @@ export function FullscreenImage({
           <img
             src={src}
             alt={alt}
+            width={resolvedWidth}
+            height={resolvedHeight}
             className={cn('h-auto w-full object-cover', imgClassName)}
             loading="lazy"
           />

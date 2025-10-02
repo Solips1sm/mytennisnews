@@ -149,8 +149,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning className={`${uiFont.variable} ${bodyFont.variable}`}>
       <head>
-        <link rel="preconnect" href="https://photoresources.wtatennis.com" crossOrigin="anonymous" />
-        <link rel="preconnect" href="https://cdn.sanity.io" crossOrigin="anonymous" />
+      <link rel="preconnect" href="https://photoresources.wtatennis.com" />
+      <link rel="preconnect" href="https://wwww.atptour.com" />
+
         <Script id="organization-schema" type="application/ld+json" strategy="beforeInteractive">
           {JSON.stringify(organizationSchema)}
         </Script>
@@ -174,7 +175,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteFooter />
         <Analytics />
         <SpeedInsights />
-        {GA_MEASUREMENT_ID ? (
+        
+         
+        {/* {GA_MEASUREMENT_ID ? (
           <>
             <Script
               src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
@@ -189,7 +192,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               `}
             </Script>
           </>
-        ) : null}
+        ) : null} */}
+
+      )
+        
       </body>
     </html>
   )

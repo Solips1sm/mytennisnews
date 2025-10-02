@@ -53,6 +53,8 @@ export function BlogPostCard({ imageSrc, imageAlt, title, description, authorNam
           alt={imageAlt}
           fill
           sizes="(max-width: 768px) 100vw, 400px"
+          loading="lazy"
+          quality={80}
           className="object-cover transition-transform duration-300 group-hover:scale-105"
         />
       </div>

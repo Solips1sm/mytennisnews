@@ -27,7 +27,12 @@ export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, p
             {leadImageUrl ? (
               <div className="relative overflow-hidden rounded-md aspect-video">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={leadImageUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                <img
+                  src={leadImageUrl}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
               </div>
             ) : null}
             <div className="flex items-start justify-between gap-4">
@@ -69,7 +74,12 @@ export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, p
             {leadImageUrl ? (
               <div className="relative overflow-hidden rounded-md aspect-video">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={leadImageUrl} alt="" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                <img
+                  src={leadImageUrl}
+                  alt=""
+                  loading="lazy"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                />
               </div>
             ) : null}
             <div className="flex items-start justify-between gap-4">
