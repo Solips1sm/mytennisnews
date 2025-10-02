@@ -195,15 +195,34 @@ export type FeedConfig = { type: 'rss' | 'rss-tags' | 'atp-rss' | 'wta-news'; na
 export type FeedIngestReport = {
   feed: FeedConfig
   items: number
+  processed: number
   created: number
   refreshed: number
   skipped: number
   blocked: number
+  remaining?: number
+  lastProcessedUrl?: string
 }
 
 export type IngestSummary = {
   reports: FeedIngestReport[]
   totals: { created: number; refreshed: number; skipped: number; blocked: number }
+}
+
+export type PendingFeedState = {
+  feed: FeedConfig
+  processedItems: number
+  totalItems?: number
+  remainingItems?: number
+  nextItemUrl?: string
+  lastProcessedUrl?: string
+}
+
+export type IngestRunResult = {
+  summary: IngestSummary
+  elapsedMs: number
+  timedOut: boolean
+  pendingFeeds: PendingFeedState[]
 }
 
 export const FEED_PRESETS: Record<string, FeedConfig> = {
@@ -239,28 +258,87 @@ function providerFor(config: FeedConfig): FeedProvider {
   }
 }
 
-export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Console }): Promise<IngestSummary> {
+export async function ingestFeeds(
+  feeds: FeedConfig[],
+  options?: { logger?: Console; timeBudgetMs?: number; timeBufferMs?: number }
+): Promise<IngestRunResult> {
   const logger = options?.logger ?? console
+  const startedAt = Date.now()
+  const timeBudgetMs = options?.timeBudgetMs && options.timeBudgetMs > 0 ? options.timeBudgetMs : Number.POSITIVE_INFINITY
+  const bufferMs = options?.timeBufferMs ?? 10_000
+  const deadlineMs = Number.isFinite(timeBudgetMs) ? startedAt + timeBudgetMs : Number.POSITIVE_INFINITY
+  const cutoffMs = deadlineMs === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : Math.max(startedAt, deadlineMs - bufferMs)
+
+  let timedOut = false
+  const pendingFeeds: PendingFeedState[] = []
+
   let totalCreated = 0
   let totalSkipped = 0
   let totalRefreshed = 0
   let totalBlocked = 0
   const reports: FeedIngestReport[] = []
-  for (const cfg of feeds) {
+
+  feedLoop: for (let feedIndex = 0; feedIndex < feeds.length; feedIndex++) {
+    const cfg = feeds[feedIndex]
+
+    if (!timedOut && cutoffMs !== Number.POSITIVE_INFINITY && Date.now() >= cutoffMs) {
+      timedOut = true
+      pendingFeeds.push({ feed: cfg, processedItems: 0 })
+      for (const remainingFeed of feeds.slice(feedIndex + 1)) {
+        pendingFeeds.push({ feed: remainingFeed, processedItems: 0 })
+      }
+      break feedLoop
+    }
+
     const provider = providerFor(cfg)
     const SOURCE_KEY = `${cfg.type}:${cfg.url}`
     const items = await provider.fetchNewItems()
+    const totalItems = items.length
+
     if (!items.length) {
       logger.log(`[${cfg.name}] No items found`)
-      reports.push({ feed: cfg, items: 0, created: 0, refreshed: 0, skipped: 0, blocked: 0 })
+      reports.push({
+        feed: cfg,
+        items: 0,
+        processed: 0,
+        created: 0,
+        refreshed: 0,
+        skipped: 0,
+        blocked: 0,
+        remaining: 0,
+      })
       continue
     }
+
     const sourceId = await upsertSource(cfg.name, cfg.url)
     let created = 0
     let refreshed = 0
     let skipped = 0
     let blocked = 0
-    for (const it of items) {
+    let processedCount = 0
+    let lastProcessedUrl: string | undefined
+    let pendingRecordedForFeed = false
+
+    for (let index = 0; index < items.length; index++) {
+      const now = Date.now()
+      if (!timedOut && cutoffMs !== Number.POSITIVE_INFINITY && now >= cutoffMs) {
+        timedOut = true
+        const nextItem = items[index]
+        pendingFeeds.push({
+          feed: cfg,
+          processedItems: processedCount,
+          totalItems,
+          remainingItems: Math.max(0, totalItems - processedCount),
+          nextItemUrl: nextItem?.url,
+          lastProcessedUrl,
+        })
+        pendingRecordedForFeed = true
+        break
+      }
+
+      const it = items[index]
+      lastProcessedUrl = it.url
+
       if (it.challenge) {
         blocked++
         totalBlocked++
@@ -271,6 +349,7 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
         })
         continue
       }
+
       if (process.env.INGEST_DEBUG === 'true') {
         const why: string[] = []
         if (!it.bodyText) why.push('no bodyText')
@@ -285,7 +364,10 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
           why: why.join(', ') || 'ok',
         })
       }
+
       const res = await processItem(it, SOURCE_KEY, sourceId)
+      processedCount++
+
       if (res.blocked) {
         blocked++
         totalBlocked++
@@ -302,13 +384,54 @@ export async function ingestFeeds(feeds: FeedConfig[], options?: { logger?: Cons
         totalCreated++
       }
     }
+
+    const remainingItems = Math.max(0, totalItems - processedCount)
+    if (timedOut && !pendingRecordedForFeed && remainingItems > 0) {
+      pendingFeeds.push({
+        feed: cfg,
+        processedItems: processedCount,
+        totalItems,
+        remainingItems,
+        lastProcessedUrl,
+      })
+      pendingRecordedForFeed = true
+    }
+
     logger.log(
-      `[${cfg.name}] processed=${items.length} created=${created} refreshed=${refreshed} skipped=${skipped} blocked=${blocked}`
+      `[${cfg.name}] processed=${processedCount}/${totalItems} created=${created} refreshed=${refreshed} skipped=${skipped} blocked=${blocked}`
     )
-    reports.push({ feed: cfg, items: items.length, created, refreshed, skipped, blocked })
+    reports.push({
+      feed: cfg,
+      items: totalItems,
+      processed: processedCount,
+      created,
+      refreshed,
+      skipped,
+      blocked,
+      remaining: remainingItems || undefined,
+      lastProcessedUrl,
+    })
+
+    if (timedOut) {
+      for (const remainingFeed of feeds.slice(feedIndex + 1)) {
+        pendingFeeds.push({ feed: remainingFeed, processedItems: 0 })
+      }
+      break feedLoop
+    }
   }
+
+  const elapsedMs = Date.now() - startedAt
   logger.log(
-    `Ingestion complete. created=${totalCreated} refreshed=${totalRefreshed} skipped=${totalSkipped} blocked=${totalBlocked}`
+    `Ingestion complete. created=${totalCreated} refreshed=${totalRefreshed} skipped=${totalSkipped} blocked=${totalBlocked} elapsed=${elapsedMs}ms timedOut=${timedOut}`
   )
-  return { reports, totals: { created: totalCreated, refreshed: totalRefreshed, skipped: totalSkipped, blocked: totalBlocked } }
+
+  return {
+    summary: {
+      reports,
+      totals: { created: totalCreated, refreshed: totalRefreshed, skipped: totalSkipped, blocked: totalBlocked },
+    },
+    elapsedMs,
+    timedOut,
+    pendingFeeds,
+  }
 }

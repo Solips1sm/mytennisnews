@@ -1,4 +1,4 @@
-import { ingestFeeds, feedsFromPresets, FEED_PRESETS, type IngestSummary } from './feed-ingestion'
+import { ingestFeeds, feedsFromPresets, FEED_PRESETS, type IngestSummary, type PendingFeedState } from './feed-ingestion'
 import { backfillMissingAIDrafts, type BackfillSummary } from './ai-backfill'
 import { publishReadyArticles, type PublishSummary } from './publish-ready'
 
@@ -8,6 +8,8 @@ export type CronCycleSummary = {
   durationMs: number
   usedPresets: string[]
   ingestion?: IngestSummary | null
+  ingestionTimedOut?: boolean
+  ingestionPendingFeeds?: PendingFeedState[] | null
   backfill?: BackfillSummary | null
   publish?: PublishSummary | null
   backfillSkipped?: boolean
@@ -61,6 +63,14 @@ function resolveBackfillLimitFromEnv(): number | undefined {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
+function resolveIngestBudgetFromEnv(): number | undefined {
+  const raw = process.env.CRON_INGEST_TIMEOUT_MS || process.env.CRON_STAGE_TIMEOUT_MS
+  if (!raw) return undefined
+  const parsed = parseInt(raw, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined
+  return Math.min(parsed, 295_000)
+}
+
 const DEFAULT_BACKFILL_LIMIT = 2
 
 function resolveSelfTriggerUrl(): string | undefined {
@@ -96,14 +106,26 @@ async function triggerFollowupIfNeeded(params: {
   startedAt: Date
   summary: BackfillSummary | null
   skipBackfill: boolean
+  ingestionPending: PendingFeedState[]
+  ingestionTimedOut: boolean
   options: CronCycleOptions
   logger: Console
 }): Promise<{ scheduled: boolean; error?: string }> {
-  const { startedAt, summary, skipBackfill, options, logger } = params
-  if (!summary) return { scheduled: false }
-  if (summary.remaining <= 0) return { scheduled: false }
-  if (options.disableFollowup) return { scheduled: false }
-  if (skipBackfill) return { scheduled: false }
+  const { startedAt, summary, skipBackfill, ingestionPending, ingestionTimedOut, options, logger } = params
+  const hasPendingBackfill = Boolean(summary && summary.remaining > 0)
+  const hasPendingIngestion = ingestionPending.length > 0
+
+  if (!hasPendingBackfill && !hasPendingIngestion) {
+    return { scheduled: false }
+  }
+
+  if (options.disableFollowup) {
+    return { scheduled: false, error: 'disabled' }
+  }
+
+  if (skipBackfill && !hasPendingIngestion) {
+    return { scheduled: false }
+  }
 
   const maxDepth = resolveSelfTriggerMaxDepth()
   const currentDepth = options.chainDepth ?? 0
@@ -141,6 +163,18 @@ async function triggerFollowupIfNeeded(params: {
   }
 
   try {
+    logger.log('[cron] Preparing follow-up trigger', {
+      pendingBackfill: hasPendingBackfill ? summary?.remaining : 0,
+      pendingIngestion: hasPendingIngestion
+        ? ingestionPending.map((p) => ({
+            feed: p.feed.name,
+            remainingItems: p.remainingItems,
+            nextItemUrl: p.nextItemUrl ?? null,
+            lastProcessedUrl: p.lastProcessedUrl ?? null,
+          }))
+        : null,
+      ingestionTimedOut,
+    })
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -149,7 +183,19 @@ async function triggerFollowupIfNeeded(params: {
         'x-cron-chain': String((options.chainDepth ?? 0) + 1),
         'x-cron-followup': '1',
       },
-      body: JSON.stringify({ reason: 'backfill-remaining' }),
+      body: JSON.stringify({
+        reason: 'followup',
+        backfillRemaining: summary?.remaining ?? null,
+        ingestionPending: hasPendingIngestion
+          ? ingestionPending.map((p) => ({
+              feed: p.feed.name,
+              remainingItems: p.remainingItems ?? null,
+              nextItemUrl: p.nextItemUrl ?? null,
+              lastProcessedUrl: p.lastProcessedUrl ?? null,
+            }))
+          : null,
+        ingestionTimedOut,
+      }),
     })
     if (!response.ok) {
       const text = await response.text()
@@ -183,10 +229,26 @@ export async function runCronCycle(options: CronCycleOptions = {}): Promise<Cron
   const feeds = feedsFromPresets(validPresets)
 
   let ingestionSummary: IngestSummary | null = null
+  let ingestionTimedOut = false
+  let ingestionPendingFeeds: PendingFeedState[] = []
   if (!feeds.length) {
     logger.warn('[cron] No valid feeds resolved; skipping ingestion step')
   } else {
-    ingestionSummary = await ingestFeeds(feeds, { logger })
+    const ingestBudgetMs = resolveIngestBudgetFromEnv()
+    const ingestResult = await ingestFeeds(feeds, { logger, timeBudgetMs: ingestBudgetMs })
+    ingestionSummary = ingestResult.summary
+    ingestionTimedOut = ingestResult.timedOut
+    ingestionPendingFeeds = ingestResult.pendingFeeds
+    if (ingestionTimedOut) {
+      logger.warn('[cron] ingestion ended early due to time budget', {
+        elapsedMs: ingestResult.elapsedMs,
+        pendingFeeds: ingestionPendingFeeds.map((p) => ({
+          feed: p.feed.name,
+          processedItems: p.processedItems,
+          remainingItems: p.remainingItems,
+        })),
+      })
+    }
     if ((ingestionSummary?.totals?.blocked ?? 0) > 0) {
       logger.warn(
         { blockedItems: ingestionSummary?.totals?.blocked },
@@ -218,6 +280,8 @@ export async function runCronCycle(options: CronCycleOptions = {}): Promise<Cron
     startedAt: started,
     summary: backfillSummary,
     skipBackfill,
+    ingestionPending: ingestionPendingFeeds,
+    ingestionTimedOut,
     options,
     logger,
   })
@@ -230,6 +294,8 @@ export async function runCronCycle(options: CronCycleOptions = {}): Promise<Cron
     durationMs,
     usedPresets: validPresets,
     ingestion: ingestionSummary,
+    ingestionTimedOut,
+    ingestionPendingFeeds: ingestionPendingFeeds.length ? ingestionPendingFeeds : null,
     backfill: backfillSummary,
     publish: publishSummary,
     backfillSkipped: skipBackfill,

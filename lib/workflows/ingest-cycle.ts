@@ -1,4 +1,10 @@
-import { ingestFeeds, feedsFromPresets, FEED_PRESETS, type IngestSummary } from './feed-ingestion'
+import {
+  ingestFeeds,
+  feedsFromPresets,
+  FEED_PRESETS,
+  type IngestSummary,
+  type PendingFeedState,
+} from './feed-ingestion'
 
 export type IngestCycleSummary = {
   startedAt: string
@@ -9,6 +15,7 @@ export type IngestCycleSummary = {
   summary: IngestSummary | null
   hasNewContent: boolean
   timedOut: boolean
+  pendingFeeds: PendingFeedState[] | null
 }
 
 export type IngestCycleOptions = {
@@ -18,14 +25,7 @@ export type IngestCycleOptions = {
 }
 
 const DEFAULT_PRESETS = ['espn', 'atp', 'wta']
-const DEFAULT_TIME_BUDGET_MS = 240_000
-
-class IngestTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`Ingest cycle exceeded allotted time (${timeoutMs}ms) before completion`)
-    this.name = 'IngestTimeoutError'
-  }
-}
+const DEFAULT_TIME_BUDGET_MS = 293_000
 
 function resolvePresetsFromEnv(): string[] | undefined {
   const raw = process.env.CRON_FEEDS
@@ -68,31 +68,27 @@ export async function runIngestCycle(options: IngestCycleOptions = {}): Promise<
   })
   let timedOut = false
   let summary: IngestSummary | null = null
-
-  const ingestPromise = ingestFeeds(feeds, { logger })
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
-      timedOut = true
-      reject(new IngestTimeoutError(timeBudgetMs))
-    }, timeBudgetMs)
-    ingestPromise
-      .then(() => {
-        clearTimeout(timer)
-      })
-      .catch(() => {
-        clearTimeout(timer)
-      })
-  })
-
+  let pendingFeeds: PendingFeedState[] = []
   try {
-    summary = await Promise.race([ingestPromise, timeoutPromise])
-  } catch (error) {
-    if (error instanceof IngestTimeoutError) {
-      logger.error('[ingest-cycle] timed out before completion', { timeBudgetMs })
-    } else {
-      logger.error('[ingest-cycle] failed', error)
-      throw error
+    const result = await ingestFeeds(feeds, { logger, timeBudgetMs })
+    summary = result.summary
+    timedOut = result.timedOut
+    pendingFeeds = result.pendingFeeds
+    if (timedOut) {
+      logger.warn('[ingest-cycle] time budget reached before completion', {
+        elapsedMs: result.elapsedMs,
+        pendingFeeds: result.pendingFeeds.map((p) => ({
+          feed: p.feed.name,
+          processedItems: p.processedItems,
+          remainingItems: p.remainingItems,
+          nextItemUrl: p.nextItemUrl ?? null,
+          lastProcessedUrl: p.lastProcessedUrl ?? null,
+        })),
+      })
     }
+  } catch (error) {
+    logger.error('[ingest-cycle] failed', error)
+    throw error
   }
 
   const finished = Date.now()
@@ -114,5 +110,6 @@ export async function runIngestCycle(options: IngestCycleOptions = {}): Promise<
     summary,
     hasNewContent,
     timedOut,
+    pendingFeeds: pendingFeeds.length ? pendingFeeds : null,
   }
 }
