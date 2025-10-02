@@ -3,13 +3,13 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BlogPostCard } from '@/components/blog-post-card'
 import { Pagination } from '@/components/pagination'
 import { FeaturedPostSidebarItem } from '@/components/featured-post-sidebar-item'
 import { Switch } from '@/components/ui/switch'
 import { cn, estimateReadTime, formatFriendlyDate } from '@/lib/utils'
+import { buttonVariants } from '@/ui/button'
 
 type Article = {
   _id: string
@@ -381,9 +381,12 @@ export function BlogPage({
                 <rect x="1" y="13" width="16" height="3" rx="1" fill="currentColor" />
               </svg>
             </div>
-            <Button variant="ghost" size="sm">
-              <Link href="/">All Posts</Link>
-            </Button>
+            <Link
+              href="/"
+              className={cn(buttonVariants({ variant: 'ghost', size: 'lg' }), 'px-5')}
+            >
+              All Posts
+            </Link>
           </div>
         </div>
         {searching ? (
