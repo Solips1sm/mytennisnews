@@ -125,8 +125,22 @@ function wrapLooseTextNodes(html: string): string {
         if (child.nodeType === Node.TEXT_NODE) {
           const raw = child.textContent || ''
           const trimmed = raw.replace(/[\u00A0]+/g, ' ').trim()
-          if (trimmed && shouldWrap) {
-            const segments = trimmed.split(/\n{2,}|\r{2,}/).map((segment) => segment.trim()).filter(Boolean)
+
+          if (!trimmed) {
+            if (shouldWrap) {
+              el.removeChild(child)
+            } else {
+              child.textContent = ''
+            }
+            return
+          }
+
+          if (shouldWrap) {
+            const segments = trimmed
+              .split(/\n{2,}|\r{2,}/)
+              .map((segment) => segment.trim())
+              .filter(Boolean)
+
             let previous: ChildNode | null = child
             segments.forEach((segment) => {
               const p = doc.createElement('p')
@@ -139,8 +153,10 @@ function wrapLooseTextNodes(html: string): string {
                 previous = p
               }
             })
+            el.removeChild(child)
+          } else {
+            child.textContent = trimmed
           }
-          el.removeChild(child)
         } else if (child.nodeType === Node.ELEMENT_NODE) {
           processElement(child as Element)
         }
