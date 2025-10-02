@@ -13,6 +13,54 @@ function hashUrl(url: string) {
   return crypto.createHash('sha256').update(url).digest('hex')
 }
 
+function normalizeCanonicalUrl(url: string | undefined | null): string | null {
+  if (!url) return null
+  try {
+    const parsed = new URL(url)
+    parsed.hash = ''
+    parsed.searchParams.sort()
+    // Remove common tracking params
+    const trackingParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content', 'igshid']
+    trackingParams.forEach((param) => parsed.searchParams.delete(param))
+    const cleanedPath = parsed.pathname.replace(/\/+$/, '') || '/'
+    parsed.pathname = cleanedPath
+    return parsed.toString().replace(/\/+$/, '')
+  } catch {
+    return url.trim().replace(/\s+/g, ' ').replace(/\/+$/, '')
+  }
+}
+
+type ExistingArticleState = {
+  publishedIds: Set<string>
+  draftIds: Set<string>
+}
+
+type ExistingArticleIndex = Map<string, ExistingArticleState>
+
+function ensureArticleState(index: ExistingArticleIndex, key: string): ExistingArticleState {
+  let state = index.get(key)
+  if (!state) {
+    state = { publishedIds: new Set(), draftIds: new Set() }
+    index.set(key, state)
+  }
+  return state
+}
+
+async function loadExistingArticleIndex(): Promise<ExistingArticleIndex> {
+  const docs: Array<{ _id: string; canonicalUrl?: string | null }> = await serverClient.fetch(
+    `*[_type == "article" && defined(canonicalUrl)]{_id, canonicalUrl}`
+  )
+  const index: ExistingArticleIndex = new Map()
+  for (const doc of docs) {
+    const key = normalizeCanonicalUrl(doc.canonicalUrl)
+    if (!key) continue
+    const state = ensureArticleState(index, key)
+    if (doc._id.startsWith('drafts.')) state.draftIds.add(doc._id)
+    else state.publishedIds.add(doc._id)
+  }
+  return index
+}
+
 async function upsertSource(name: string, feedUrl: string) {
   const id = `source-${hashUrl(feedUrl).slice(0, 12)}`
   await serverClient.createIfNotExists({
@@ -143,10 +191,16 @@ type ProcessItemResult = {
   refreshed?: boolean
   skipped?: boolean
   blocked?: boolean
+  alreadyPublished?: boolean
   challenge?: ChallengeDetection
 }
 
-async function processItem(it: NormalizedItem, sourceKey: string, sourceId: string): Promise<ProcessItemResult> {
+async function processItem(
+  it: NormalizedItem,
+  sourceKey: string,
+  sourceId: string,
+  existingArticles: ExistingArticleIndex
+): Promise<ProcessItemResult> {
   if (it.challenge) {
     if (process.env.INGEST_DEBUG === 'true') {
       console.warn('[ingest] challenge detected, skipping', {
@@ -164,10 +218,18 @@ async function processItem(it: NormalizedItem, sourceKey: string, sourceId: stri
       it.bodyText = htmlToPlainText(fixed)
     }
   }
+  const canonicalKey = normalizeCanonicalUrl(it.url)
+  const existingState = canonicalKey ? existingArticles.get(canonicalKey) : undefined
+  if (existingState && existingState.publishedIds.size > 0) {
+    if (process.env.INGEST_DEBUG === 'true') {
+      console.log('[ingest] skipping published article', { url: it.url, publishedIds: Array.from(existingState.publishedIds) })
+    }
+    return { skipped: true, alreadyPublished: true }
+  }
   const idHash = hashUrl(it.url)
   const already = await prisma.ingestedItem.findFirst({ where: { sourceKey, externalId: idHash } })
   if (already) {
-    if (process.env.INGEST_REFRESH === 'true') {
+    if (process.env.INGEST_REFRESH === 'true' && !(existingState && existingState.publishedIds.size > 0)) {
       await prisma.ingestedItem.update({
         where: { id: already.id },
         data: { raw: it as any, normalized: it as any, status: 'refreshed' },
@@ -175,7 +237,7 @@ async function processItem(it: NormalizedItem, sourceKey: string, sourceId: stri
       await updateDraftFromItem(it, sourceId)
       return { refreshed: true }
     }
-    return { skipped: true }
+    return { skipped: true, alreadyPublished: existingState?.publishedIds.size ? true : false }
   }
   await prisma.ingestedItem.create({
     data: {
@@ -186,7 +248,11 @@ async function processItem(it: NormalizedItem, sourceKey: string, sourceId: stri
       status: 'new',
     },
   })
-  await createDraftFromItem(it, sourceId)
+  const created = await createDraftFromItem(it, sourceId)
+  if (canonicalKey) {
+    const state = ensureArticleState(existingArticles, canonicalKey)
+    state.draftIds.add(created._id ?? `drafts.${idHash}`)
+  }
   return { skipped: false }
 }
 
@@ -278,6 +344,9 @@ export async function ingestFeeds(
   let totalBlocked = 0
   const reports: FeedIngestReport[] = []
 
+  const existingArticles = await loadExistingArticleIndex()
+  logger.log('[ingest] Loaded existing canonical index', { keys: existingArticles.size })
+
   feedLoop: for (let feedIndex = 0; feedIndex < feeds.length; feedIndex++) {
     const cfg = feeds[feedIndex]
 
@@ -365,7 +434,7 @@ export async function ingestFeeds(
         })
       }
 
-      const res = await processItem(it, SOURCE_KEY, sourceId)
+      const res = await processItem(it, SOURCE_KEY, sourceId, existingArticles)
       processedCount++
 
       if (res.blocked) {
