@@ -102,3 +102,15 @@ body {
   }
   .ext-social p { margin: 0; }
 }
+
+/* Mobile typographic coherence for prose content */
+@media (max-width: 640px) {
+  .prose h1 { font-size: 1.35rem; line-height: 1.2; margin-top: 1.1rem; margin-bottom: 0.6rem; }
+  .prose h2 { font-size: 1.2rem;  line-height: 1.25; margin-top: 1.0rem; margin-bottom: 0.55rem; }
+  .prose h3 { font-size: 1.1rem;  line-height: 1.3;  margin-top: 0.95rem; margin-bottom: 0.5rem; }
+  .prose h4 { font-size: 1rem;    line-height: 1.35; margin-top: 0.9rem;  margin-bottom: 0.45rem; }
+  /* Keep body comfortable; headings are the main scale reducer */
+  .prose p { line-height: 1.55; }
+  .prose ul, .prose ol { margin-top: 0.6rem; margin-bottom: 0.6rem; }
+  .prose li { margin-top: 0.25rem; margin-bottom: 0.25rem; }
+}

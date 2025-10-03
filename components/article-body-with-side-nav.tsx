@@ -298,10 +298,10 @@ export function ArticleBodyWithSideNav({ html, sourceHost, primaryImageUrl }: { 
     <div className="relative">
       <div
         ref={containerRef}
-        className="prose prose-neutral dark:prose-invert mt-6 text-2xl mx-auto w-full max-w-none [&_h1]:scroll-mt-24 [&_h2]:scroll-mt-24 [&_h3]:scroll-mt-24 [&_h4]:scroll-mt-24 [&_p]:scroll-mt-24"
+        className="prose prose-neutral dark:prose-invert mt-2 md:mt-6 text-2xl mx-auto w-[95vw] max-w-[95vw] sm:w-full sm:max-w-none [&_h1]:scroll-mt-24 [&_h2]:scroll-mt-24 [&_h3]:scroll-mt-24 [&_h4]:scroll-mt-24 [&_p]:scroll-mt-24"
         style={contentBoundsStyle}
       >
-        <RichExternalContent html={html} sourceHost={sourceHost} primaryImageUrl={primaryImageUrl} />
+        <RichExternalContent html={html} sourceHost={sourceHost} primaryImageUrl={primaryImageUrl} className="w-[96vw] max-w-[98vw] sm:w-full sm:max-w-none" />
       </div>
       <SideDotNav
         count={Math.max(anchors.length, 1)}
@@ -310,7 +310,7 @@ export function ArticleBodyWithSideNav({ html, sourceHost, primaryImageUrl }: { 
         onNext={handleNext}
         onSelect={handleSelect}
         items={anchors.map(a => ({ title: a.title, preview: a.preview }))}
-        className="pointer-events-auto absolute right-4 top-1/2 -translate-y-1/2 z-30"
+        className="pointer-events-auto absolute right-1 top-1/2 -translate-y-1/2 z-30 hidden md:flex"
       />
     </div>
   )

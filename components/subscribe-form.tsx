@@ -57,7 +57,7 @@ export function SubscribeForm({ size = 'sm' as 'sm' | 'default' | 'lg' }: { size
   }
 
   return (
-    <form onSubmit={onSubmit} className="mt-8 max-w-md space-y-2">
+    <form onSubmit={onSubmit} className="m-0 max-w-md space-y-2">
       <div className="flex gap-2">
         <Input
           type="email"
@@ -66,13 +66,14 @@ export function SubscribeForm({ size = 'sm' as 'sm' | 'default' | 'lg' }: { size
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           aria-label="Email address"
+          className="min-w-0"
         />
-        <Button type="submit" size={size} disabled={status === 'loading'}>
+        <Button type="submit" size={size} disabled={status === 'loading'} className="min-w-[8.25rem]">
           {status === 'loading' ? 'Subscribing…' : 'Subscribe'}
         </Button>
       </div>
       <p className="text-xs text-muted-foreground">No spam. Unsubscribe anytime.</p>
-      {message ? <p className="text-xs" aria-live="polite">{message}</p> : null}
+      <div className="text-xs min-h-[1.25rem]" aria-live="polite" aria-atomic="true">{message ?? ''}</div>
     </form>
   )
 }

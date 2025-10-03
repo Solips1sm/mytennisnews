@@ -7,20 +7,20 @@ type NodeLike = { type: string; attrs: Record<string, string>; children: NodeLik
 
 function normalizeSrc(src: string | null | undefined, reference?: string): string | undefined {
   if (!src) return undefined
-  const trimmed = src.trim()
-  if (!trimmed) return undefined
+  const srcTrimmed = src.trim()
+  if (!srcTrimmed) return undefined
   try {
-    return new URL(trimmed).toString()
+    return new URL(srcTrimmed).toString()
   } catch {
     if (reference) {
       try {
         const base = new URL(reference)
-        return new URL(trimmed, base.origin).toString()
+        return new URL(srcTrimmed, base.origin).toString()
       } catch {
-        return trimmed
+        return srcTrimmed
       }
     }
-    return trimmed
+    return srcTrimmed
   }
 }
 
@@ -124,25 +124,32 @@ function wrapLooseTextNodes(html: string): string {
       children.forEach((child) => {
         if (child.nodeType === Node.TEXT_NODE) {
           const raw = child.textContent || ''
-          const trimmed = raw.replace(/[\u00A0]+/g, ' ').trim()
+          // Normalize non-breaking spaces but preserve newlines for wrapping logic
+          const normalized = raw.replace(/[\u00A0]+/g, ' ')
+          const textTrim = normalized.trim()
+          const trimmed = textTrim
 
-          if (!trimmed) {
+          // If text is only whitespace, preserve a single spacer when between inline siblings (non-wrapping contexts)
+          if (!textTrim) {
             if (shouldWrap) {
               el.removeChild(child)
             } else {
-              child.textContent = ''
+              const prev = child.previousSibling
+              const next = child.nextSibling
+              const hasNeighbors = !!(prev && next)
+              child.textContent = hasNeighbors ? ' ' : ''
             }
             return
           }
 
           if (shouldWrap) {
-            const segments = trimmed
+            const segments: string[] = textTrim
               .split(/\n{2,}|\r{2,}/)
-              .map((segment) => segment.trim())
-              .filter(Boolean)
+              .map((segment: string) => segment.trim())
+              .filter((s: string) => Boolean(s))
 
             let previous: ChildNode | null = child
-            segments.forEach((segment) => {
+            segments.forEach((segment: string) => {
               const p = doc.createElement('p')
               p.textContent = segment
               if (previous && previous.parentNode === el) {
@@ -155,7 +162,14 @@ function wrapLooseTextNodes(html: string): string {
             })
             el.removeChild(child)
           } else {
-            child.textContent = trimmed
+            // Collapse internal whitespace but preserve boundary spaces if present
+            const hadLeading = /^\s/.test(raw)
+            const hadTrailing = /\s$/.test(raw)
+            const collapsedInner = normalized.replace(/\s+/g, ' ').trim()
+            let nextText = collapsedInner
+            if (hadLeading) nextText = ' ' + nextText
+            if (hadTrailing) nextText = nextText + ' '
+            child.textContent = nextText
           }
         } else if (child.nodeType === Node.ELEMENT_NODE) {
           processElement(child as Element)
@@ -170,7 +184,7 @@ function wrapLooseTextNodes(html: string): string {
   }
 }
 
-export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { html: string; sourceHost?: string; primaryImageUrl?: string }) {
+export function RichExternalContent({ html, sourceHost, primaryImageUrl, className }: { html: string; sourceHost?: string; primaryImageUrl?: string; className?: string }) {
   const isESPN = !!sourceHost?.includes('espn.com')
   const isBrowser = typeof window !== 'undefined' && typeof DOMParser !== 'undefined'
   const containerRef = useRef<HTMLDivElement>(null)
@@ -396,7 +410,7 @@ export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { htm
   return (
     <div
       ref={containerRef}
-      className="prose prose-neutral dark:prose-invert w-full max-w-none [&_a]:underline"
+      className={["prose prose-neutral dark:prose-invert w-full max-w-none [&_a]:underline", className].filter(Boolean).join(' ')}
       style={{ maxWidth: 'var(--article-content-max)' }}
     >
       <style
@@ -409,6 +423,20 @@ export function RichExternalContent({ html, sourceHost, primaryImageUrl }: { htm
           @media (max-width: 640px){.ext-embed,.ext-twitter{max-width:100%;width:100%}}
           .ext-video .aspect-video{position:relative}
           .ext-video .aspect-video iframe{position:absolute;inset:0;width:100%;height:100%}
+          /* Ensure inline anchors keep breathing room on small screens */
+          @media (max-width:640px){
+            .prose a{margin-inline:1.5px}
+            .prose a:first-child{margin-left:0}
+            .prose a:last-child{margin-right:0}
+            /* Typographic tweaks for mobile */
+            .prose h1{font-size:1.35rem;line-height:1.2;margin-top:1.15rem;margin-bottom:0.6rem}
+            .prose h2{font-size:1.2rem;line-height:1.25;margin-top:1.05rem;margin-bottom:0.55rem}
+            .prose h3{font-size:1.1rem;line-height:1.3;margin-top:0.95rem;margin-bottom:0.5rem}
+            .prose h4{font-size:1rem;line-height:1.35;margin-top:0.9rem;margin-bottom:0.45rem}
+            .prose p{font-size:1rem;line-height:1.6}
+            .prose ul,.prose ol{margin-top:0.6rem;margin-bottom:0.6rem}
+            .prose li{margin-top:0.25rem;margin-bottom:0.25rem}
+          }
         `,
         }}
       />

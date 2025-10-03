@@ -56,11 +56,13 @@ export function ArticleContent({ article }: { article: Article }) {
       }).format(new Date(article.publishedAt))
     : undefined
   return (
-  <article className="relative mx-auto w-full max-w-[1335px] px-3 sm:px-4 lg:px-6 xl:px-8" style={articleStyle}>
-      <header className="mb-6">
-        <h1 className="text-3xl font-ui font-semibold tracking-tight sm:text-4xl">{article.title}</h1>
-  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
+  <article className="relative mx-auto w-full max-w-[1335px] px-2 sm:px-3 lg:px-4 xl:px-6" style={articleStyle}>
+      <header className="mb-2 md:mb-3">
+        <h1 className="text-2xl font-ui font-semibold tracking-tight sm:text-3xl">{article.title}</h1>
+        {/* Meta area: Row 1 = identity; Row 2 = time/meta left + actions right; Row 3 = tags */}
+        <div className="mt-1 md:mt-2 flex flex-wrap items-center gap-2 sm:gap-2 text-[13px] text-muted-foreground">
+          {/* Row 1: source identity (avatar + name) + actions (mobile only rightmost) */}
+          <div className="order-1 flex items-center gap-1 md:gap-2 min-w-0 w-full">
             <Avatar className="h-8 w-8">
               {logo ? (
                 <AvatarImage src={logo.src} alt={logo.alt} className={logo.className} />
@@ -82,9 +84,30 @@ export function ArticleContent({ article }: { article: Article }) {
             ) : (
               <span>{article.source?.name}</span>
             )}
+            {/* Mobile-only actions inline with source, rightmost */}
+            <div className="ml-auto flex items-center gap-1 sm:hidden">
+              {article.canonicalUrl ? (
+                <a href={article.canonicalUrl} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" variant="secondary" className="h-8 px-2 text-xs">
+                    <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Source
+                  </Button>
+                </a>
+              ) : null}
+              <ShareButton
+                title={article.title}
+                url={article.canonicalUrl}
+                size="sm"
+                variant="outline"
+                copyLabel="Copy"
+                compact
+                className="h-8"
+              />
+            </div>
           </div>
+          {/* Row 2: meta/time left + actions right (always rightmost on all breakpoints) */}
           {(article.authors && article.authors.length) || (article.timestampText || formattedDate) ? (
-            <div className="article-meta inline-flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1">
+            <div className="order-2 basis-full flex items-center gap-2">
+              <div className="article-meta inline-flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-2 py-0.5">
               {article.authors && article.authors.length ? (
                 <ul className="authors m-0 flex list-none items-center gap-2 p-0">
                   {article.authors.map((a) => (
@@ -106,39 +129,44 @@ export function ArticleContent({ article }: { article: Article }) {
                   )}
                 </span>
               ) : null}
+              </div>
+              {/* Desktop/tablet-only actions rightmost */}
+              <div className="ml-auto hidden sm:flex items-center gap-2">
+                {article.canonicalUrl ? (
+                  <a href={article.canonicalUrl} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="secondary" className="h-8 px-2 text-xs">
+                      <ExternalLink className="mr-1.5 h-3.5 w-3.5" /> Read the Source
+                    </Button>
+                  </a>
+                ) : null}
+                <ShareButton
+                  title={article.title}
+                  url={article.canonicalUrl}
+                  size="sm"
+                  variant="outline"
+                  copyLabel="Copy link"
+                  className="h-8"
+                />
+              </div>
             </div>
           ) : null}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-
-            {article.tags && article.tags.length ? (
-              <>
-                <div className="flex flex-wrap items-center gap-1">
-                    {article.tags.slice(0, 3).map((t) => (
-                    <Badge key={t._id} className="rounded-full">
-                      {t.name}
-                    </Badge>
-                  ))}
-                </div>
-              </>
-            ) : null}
-            <div className="flex items-center gap-1 ml-2">
-                        {article.canonicalUrl ? (
-              <a href={article.canonicalUrl} target="_blank" rel="noopener noreferrer">
-                <Button size="sm" variant="secondary">
-                  <ExternalLink className="mr-2 h-4 w-4" /> Read at Source
-                </Button>
-              </a>
-            ) : null}
-            <ShareButton title={article.title} url={article.canonicalUrl} />
+          {/* Tags: Row 3 on small (full width); inline on sm+ */}
+          {article.tags && article.tags.length ? (
+            <div className="order-3 basis-full sm:order-none sm:basis-auto flex flex-wrap items-center gap-1 sm:ml-2">
+              {article.tags.slice(0, 3).map((t) => (
+                <Badge key={t._id} className="rounded-full">
+                  {t.name}
+                </Badge>
+              ))}
             </div>
-          </div>
+          ) : null}
         </div>
       </header>
 
       {article.excerpt ? <p className="mt-4 text-muted-foreground font-ui">{article.excerpt}</p> : null}
 
       {article.leadImageUrl ? (
-        <div className="mt-6 mx-auto w-full max-w-none" style={contentBoundsStyle}>
+        <div className="mt-3 md:mt-6 mx-auto w-full max-w-none" style={contentBoundsStyle}>
           <FullscreenImage
             src={article.leadImageUrl}
             alt={article.title}
@@ -155,13 +183,13 @@ export function ArticleContent({ article }: { article: Article }) {
       ) : article.externalHtml ? (
         <ArticleBodyWithSideNav html={article.externalHtml} sourceHost={hostname} primaryImageUrl={article.leadImageUrl} />
       ) : article.body ? (
-        <div className="prose prose-neutral dark:prose-invert mt-6 text-2xl mx-auto w-full max-w-none" style={contentBoundsStyle}>
+        <div className="prose prose-neutral dark:prose-invert mt-3 md:mt-6 text-2xl mx-auto w-full max-w-none" style={contentBoundsStyle}>
           <PortableText value={article.body} />
         </div>
       ) : null}
 
 
-      <div className="mt-10 flex items-center justify-between gap-3">
+      <div className="mt-4 md:mt-10 flex items-center justify-between gap-3">
         {/* Back to articles link */}
         <Link
           href="/"

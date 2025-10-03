@@ -1227,7 +1227,7 @@ export class OpenAIPipeline implements AIPipelineProvider {
       `Link formatting: never output bare URLs, markdown links, or parentheses containing URLs. Write the subject text only; downstream formatting attaches the href.`,
       `Media handling:\n${mediaRequirement}`,
       'Narrative voice: write with the cadence of a seasoned tennis analyst on site—blend nuanced, non-interfering tactile imagery (light, sound, tempo) with strategic insight, and close sections with forward-looking beats rather than summaries.',
-      `Language hygiene:\n• Remove emojis/hashtags.\n• Prefer "slice"/"underspin", "inside-in"/"inside-out", "down-the-line", "crosscourt", and "1–2"/"one–two" combinations.\n• Keep paragraphs concise (2–4 sentences) and never use ALL CAPS.`,
+      `Language hygiene:\n• Remove emojis/hashtags.\n• Prefer "slice"/"underspin", "inside-in"/"inside-out", "down-the-line", "crosscourt", and "1–2"/"one–two" combinations. Do not use discriminatory statements like "rust", "failure", use factual terms, and less prose.\n• Keep paragraphs concise (2–4 sentences) and never use ALL CAPS.`,
       linkRequirement,
       'HTML hygiene: output valid HTML5 fragment with balanced tags, no Markdown fences, no self-invented wrapper elements for plain text, and never leave dangling <div> or </p> markers or decorative trailing punctuation like ###.',
       strategy === 'variant'

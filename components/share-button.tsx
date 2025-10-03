@@ -9,9 +9,13 @@ type ShareButtonProps = {
   className?: string
   size?: 'sm' | 'default' | 'lg' | 'icon'
   variant?: 'default' | 'secondary' | 'outline' | 'ghost'
+  copyLabel?: string
+  shareLabel?: string
+  copiedLabel?: string
+  compact?: boolean
 }
 
-export function ShareButton({ title, url, className, size = 'sm', variant = 'outline' }: ShareButtonProps) {
+export function ShareButton({ title, url, className, size = 'sm', variant = 'outline', copyLabel, shareLabel, copiedLabel, compact }: ShareButtonProps) {
   const [copied, setCopied] = useState(false)
   const targetUrl = useMemo(() => {
     if (url && url.length) return url
@@ -50,19 +54,22 @@ export function ShareButton({ title, url, className, size = 'sm', variant = 'out
 
   const canNativeShare = typeof window !== 'undefined' && 'share' in navigator && typeof (navigator as any).share === 'function'
 
+  const iconCls = compact ? 'mr-1.5 h-3.5 w-3.5' : 'mr-2 h-4 w-4'
+  const btnExtra = compact ? 'h-7 px-2 text-xs' : ''
+
   return (
-    <Button onClick={onShare} size={size} variant={variant} className={className} aria-label="Share this article">
+    <Button onClick={onShare} size={size} variant={variant} className={[className, btnExtra].filter(Boolean).join(' ')} aria-label="Share this article">
       {copied ? (
         <>
-          <Check className="mr-2 h-4 w-4" /> Copied
+          <Check className={iconCls} /> {copiedLabel || 'Copied'}
         </>
       ) : canNativeShare ? (
         <>
-          <Share2 className="mr-2 h-4 w-4" /> Share
+          <Share2 className={iconCls} /> {shareLabel || 'Share'}
         </>
       ) : (
         <>
-          <LinkIcon className="mr-2 h-4 w-4" /> Copy link
+          <LinkIcon className={iconCls} /> {copyLabel || 'Copy link'}
         </>
       )}
     </Button>

@@ -1,5 +1,6 @@
 "use client"
 import { useEffect, useRef, useState } from 'react'
+import { SubscribeFormInline } from './subscribe-form-inline'
 
 export function HeroSubscribe() {
   const [hidden, setHidden] = useState<boolean>(false)
@@ -43,10 +44,11 @@ export function HeroSubscribe() {
     <section
       ref={sectionRef}
       className={[
-        'relative isolate overflow-hidden rounded-xl border bg-background',
-        closing ? 'opacity-0 [filter:blur(6px)] pointer-events-none -mb-8' : 'opacity-100 [filter:blur(0px)]',
-        closing ? '' : 'min-h-[25svh]',
-        'transition-[height,opacity,filter,margin-bottom] duration-300 ease-out will-change-[height,opacity,filter]'
+        'hero-subscribe relative isolate overflow-hidden rounded-xl border bg-background',
+        closing ? 'opacity-0 [filter:blur(6px)] pointer-events-none' : 'opacity-100 [filter:blur(0px)]',
+  closing ? '' : 'min-h-[16svh] md:min-h-[16svh]',
+        'transition-[height,opacity,filter,margin-bottom] duration-300 ease-out will-change-[height,opacity,filter]',
+        closing ? '-mb-8' : 'mb-6 md:mb-8'
       ].join(' ')}
       style={inlineHeight !== null ? { height: inlineHeight } : undefined}
     >
@@ -59,33 +61,55 @@ export function HeroSubscribe() {
         }}
         aria-hidden="true"
       />
-      <div className="absolute right-4 top-4 z-20">
+      <div className="absolute right-2 top-2 sm:right-4 sm:top-4 z-20">
         <button
           type="button"
           aria-label="Hide newsletter banner"
           onClick={onClose}
-          className="h-8 w-24 rounded-full border border-white/20 px-2 text-sm font-extralight text-white/90 backdrop-blur transition hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+          className="hero-close h-7 w-20 text-xs sm:h-8 sm:w-24 sm:text-sm rounded-full border border-white/20 px-2 font-extralight text-white/90 backdrop-blur transition hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
         >
           Hide
         </button>
       </div>
 
-      <div className="relative z-10 mx-auto flex max-w-5xl flex-col items-center px-6 py-12 text-center text-white">
-        <p className="text-xs uppercase tracking-wider text-white/75">MyTennisNews Weekly</p>
-        <h1 className="mt-2 text-2xl font-bold sm:text-3xl">The smartest tennis brief in your inbox</h1>
-        <p className="mt-2 max-w-xl text-sm text-white/85">
+      <div className="hero-subscribe__inner relative z-10 mx-auto flex max-w-5xl flex-col items-center px-5 py-6 sm:py-8 text-center text-white">
+        <p className="hero-kicker text-[11px] uppercase tracking-wider text-white/75">MyTennisNews Weekly</p>
+        <h1 className="hero-title mt-1.5 text-[20px] leading-tight font-bold sm:text-[24px]">The smartest tennis brief in your inbox</h1>
+        <p className="hero-lede mt-1.5 max-w-xl text-[13px] sm:text-sm leading-snug text-white/85">
           Curated pro tour headlines, storylines that matter, and must‑read links — in one quick email. No noise. No spam.
         </p>
-        <div className="mt-5 w-full max-w-md">
+        <div className="mt-4 w-full max-w-md">
           <SubscribeFormInline />
         </div>
       </div>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+          /* Further tighten when in portrait or very short viewports */
+          @media (orientation: portrait) {
+            .hero-subscribe{ min-height:12svh; }
+          }
+          @media (orientation: portrait) and (max-height: 740px) {
+            .hero-subscribe__inner{ padding-top:14px; padding-bottom:14px; }
+            .hero-kicker{ font-size:10px; }
+            .hero-title{ font-size:18px; line-height:1.15; margin-top:6px; }
+            .hero-lede{ font-size:12px; line-height:1.25; margin-top:6px; }
+            .hero-close{ height:28px; width:76px; font-size:12px; }
+            /* keep close outside text bounds and away from notches */
+            .hero-subscribe > .absolute{ right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); z-index: 40; }
+          }
+          @media (max-height: 640px) and (orientation: portrait) {
+            .hero-subscribe{ min-height:10svh; }
+            /* Hide lede on very constrained vertical space */
+            .hero-lede{ display:none; }
+            .hero-title{ margin-top:4px; }
+            .hero-subscribe__inner{ padding-top:12px; padding-bottom:12px; }
+          }
+        `,
+        }}
+      />
     </section>
   )
 }
 
-// Using a thin wrapper to avoid importing client component at top-level
-import dynamic from 'next/dynamic'
-const SubscribeFormInline = dynamic(() => import('./subscribe-form-inline').then((m) => m.SubscribeFormInline), {
-  ssr: true,
-})
+// Note: Inline form imported statically to avoid hydration timing differences and layout snaps
