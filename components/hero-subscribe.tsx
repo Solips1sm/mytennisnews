@@ -52,9 +52,17 @@ export function HeroSubscribe() {
       ].join(' ')}
       style={inlineHeight !== null ? { height: inlineHeight } : undefined}
     >
-      <div className="pointer-events-none absolute inset-0" aria-hidden="true" />
+      {/* Background overlays: softened for mobile, original for sm+ */}
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 block sm:hidden"
+        style={{
+          background:
+            'radial-gradient(circle at 50% -10%, rgba(99,0,237,0.35) 0%, rgba(13,13,13,0.85) 55%), linear-gradient(to bottom, rgba(13,13,13,0.85), rgba(13,13,13,1))',
+        }}
+        aria-hidden="true"
+      />
+      <div
+        className="absolute inset-0 hidden sm:block"
         style={{
           background:
             'radial-gradient(circle at 50% -20%, rgba(99,0,237,0.6) 0%, rgba(13,13,13,0.93) 50%, rgba(13,13,13,1) 70%)',
