@@ -9,6 +9,7 @@ type Article = {
   publishedAt?: string
   source?: { name?: string; url?: string }
   leadImageUrl?: string
+  readingChars?: number
 }
 
 export function ArticleList({ articles }: { articles: Article[] }) {

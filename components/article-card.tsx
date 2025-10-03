@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { Badge } from '@/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { estimateReadTime } from '@/lib/utils'
+import { estimateReadTime, estimateReadTimeFromChars, formatFriendlyDate, formatLocalDetailed } from '@/lib/utils'
 import { resolveSourceLogo } from '@/lib/logo-resolver'
 
 type Props = {
@@ -14,10 +14,11 @@ type Props = {
   publishedAt?: string
   tags?: Array<{ _id: string; name: string }>
   leadImageUrl?: string
+  readingChars?: number
 }
 
-export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, publishedAt, tags, leadImageUrl }: Props) {
-  const readTime = estimateReadTime(excerpt || title || '')
+export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, publishedAt, tags, leadImageUrl, readingChars }: Props) {
+  const readTime = readingChars != null ? estimateReadTimeFromChars(readingChars) : estimateReadTime(excerpt || title || '')
   const logo = resolveSourceLogo(canonicalUrl, source?.name)
   return (
     <li key={_id} className="group p-0 transition-colors">
@@ -43,8 +44,10 @@ export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, p
           {excerpt ? (
             <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{excerpt}</p>
           ) : null}
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-            {publishedAt ? <time dateTime={publishedAt}>{new Date(publishedAt).toLocaleDateString()}</time> : null}
+          <div className="group/meta mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            {publishedAt ? (
+              <time dateTime={publishedAt} className="hidden group-hover/meta:inline">{formatLocalDetailed(publishedAt) || ''}</time>
+            ) : null}
             {source?.name && canonicalUrl ? (
               <a href={canonicalUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline underline-offset-2">
                 <Avatar className="h-6 w-6">
@@ -61,8 +64,18 @@ export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, p
             {tags?.slice(0, 3).map((t) => (
               <Badge key={t._id} className="border-muted-foreground/30 text-muted-foreground">{t.name}</Badge>
             ))}
-            <span aria-hidden="true">•</span>
-            <span>{readTime} read</span>
+            <span aria-hidden="true" className="group-hover/meta:hidden">•</span>
+            <span className="relative inline-block align-baseline">
+              <span className="block opacity-100 filter blur-0 transition-all duration-[600ms] group-hover/meta:opacity-0 group-hover/meta:blur-[2px]">{readTime} read</span>
+              {publishedAt ? (
+                <span
+                  className="pointer-events-none absolute inset-0 flex items-center opacity-0 filter blur-[2px] transition-all duration-[600ms] group-hover/meta:opacity-100 group-hover/meta:blur-0 whitespace-nowrap"
+                  title={new Date(publishedAt).toString()}
+                >
+                  {formatLocalDetailed(publishedAt) || ''}
+                </span>
+              ) : null}
+            </span>
             </div>
           </div>
             </div>
@@ -90,16 +103,18 @@ export function ArticleCard({ _id, title, slug, excerpt, source, canonicalUrl, p
                 {excerpt ? (
                   <p className="mt-1 text-sm text-muted-foreground line-clamp-2">{excerpt}</p>
                 ) : null}
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                  {publishedAt ? <time dateTime={publishedAt}>{new Date(publishedAt).toLocaleDateString()}</time> : null}
+                <div className="group/meta mt-2 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                  {publishedAt ? (
+                    <time dateTime={publishedAt} className="hidden group-hover/meta:inline">{formatLocalDetailed(publishedAt) || ''}</time>
+                  ) : null}
                   {source?.name && canonicalUrl ? (
                     <span className="underline underline-offset-2">{source.name} ↗</span>
                   ) : null}
                   {tags?.slice(0, 3).map((t) => (
                     <Badge key={t._id} className="border-muted-foreground/30 text-muted-foreground">{t.name}</Badge>
                   ))}
-                  <span aria-hidden="true">•</span>
-                  <span>{readTime} read</span>
+                  <span aria-hidden="true" className="group-hover/meta:hidden">•</span>
+                  <span className="group-hover/meta:hidden">{readTime} read</span>
                 </div>
               </div>
             </div>

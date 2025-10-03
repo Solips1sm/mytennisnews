@@ -9,6 +9,8 @@ export const ARTICLES_LIST = groq`
   leadImageUrl,
   canonicalUrl,
   publishedAt,
+  // Approximate characters available for reading; externalHtml is a proxy for content length when present
+  "readingChars": length(coalesce(aiFinal.body, externalText, externalHtml, excerpt, title, "")),
   source->{name, url},
   tags[]->{_id, name, "slug": slug.current}
 }`
@@ -22,6 +24,7 @@ export const ARTICLES_LIST_PUBLISHED = groq`
   leadImageUrl,
   canonicalUrl,
   publishedAt,
+  "readingChars": length(coalesce(aiFinal.body, externalText, externalHtml, excerpt, title, "")),
   source->{name, url},
   tags[]->{_id, name, "slug": slug.current}
 }`
@@ -80,6 +83,7 @@ export const ARTICLES_PAGINATED = groq`
       canonicalUrl,
       publishedAt,
       "updatedAt": _updatedAt,
+      "readingChars": length(coalesce(aiFinal.body, externalText, externalHtml, excerpt, title, "")),
       source->{name, url},
       tags[]->{_id, name, "slug": slug.current}
     },
@@ -98,6 +102,7 @@ export const ARTICLES_PAGINATED_PUBLISHED = groq`
       canonicalUrl,
       publishedAt,
       "updatedAt": _updatedAt,
+      "readingChars": length(coalesce(aiFinal.body, externalText, externalHtml, excerpt, title, "")),
       source->{name, url},
       tags[]->{_id, name, "slug": slug.current}
     },

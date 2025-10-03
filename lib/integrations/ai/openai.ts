@@ -53,7 +53,7 @@ function cryptoRandomId(): string {
   return crypto.randomBytes(12).toString('hex')
 }
 
-const sysBase = `You are a visionary tennis feature writer and editor. Your copy reads like a courtside dispatch that marries tactics, psychology, and atmosphere. Refresh the language, paraphrase faithfully, and verify details; if uncertain, acknowledge the gap. The tone is human, confident, and poetic without drifting into purple prose.
+const sysBase = `You are a visionary tennis feature writer and editor. Your copy reads like a courtside dispatch that marries tactics, psychology, and atmosphere. Refresh the language, paraphrase faithfully, and verify details; if uncertain, acknowledge the gap. The tone is human, confident, and sport-centered, without drifting into purple prose.
 
 Direction conventions: prefer "inside-in", "inside-out", "crosscourt", and "down-the-line" for ball flights. Avoid "ad court" / "deuce court" labels except when discussing formations. Terminology: use "slice" / "underspin" (not "slider"), and describe patterns as "1–2" or "one–two" (never "serve+1").
 
@@ -1222,14 +1222,14 @@ export class OpenAIPipeline implements AIPipelineProvider {
         ? 'Synthesize the strongest final article: merge the best insights, remove duplicate phrasing, keep unique player mentions once per paragraph, and resolve tone/tense conflicts.'
         : undefined,
       `Title & excerpt: craft a headline that feels like a human tennis feature (no gimmicky colons or ALL CAPS) and an excerpt that invites the reader in with tension or momentum—avoid repeating the opener verbatim.`,
-  `Body requirements:\n• Minimum length ${minTarget} characters.\n• Use 2–3 <h2> subheads after the opener; each is 4–8 words, in sentence case, and hints at the human or tactical pivot that follows.\n• Wrap every paragraph-worthy block in <p>...</p> tags—no raw text directly inside the root or generic <div> wrappers for prose.\n• Keep paragraphs grouped beneath those subheads; avoid bullet lists, numbered steps, or blueprint language.\n• Never split paragraphs mid-sentence; ensure each ends with proper terminal punctuation (., ?, !).\n• Do not append trailing decorative symbols (e.g., ###, *** or long ellipses) and avoid leaving dangling punctuation.\n• Keep the opening paragraph free of attributions. From paragraph two onward, vary verbs (limit the exact phrase "according to" to one use).\n• Emphasize concrete tennis detail (patterns, surfaces, adjustments) while weaving in emotion, crowd energy, and context.`,
+      `Body requirements:\n• Minimum length ${minTarget} characters.\n• Use 2–3 <h2> subheads after the opener; each is 4–8 words, in sentence case, and hints at the human or tactical pivot that follows.\n• Wrap every paragraph-worthy block in <p>...</p> tags—no raw text directly inside the root or generic <div> wrappers for prose.\n• Keep paragraphs grouped beneath those subheads; avoid bullet lists, numbered steps, or blueprint language.\n• Never split paragraphs mid-sentence; ensure each ends with proper terminal punctuation (., ?, !).\n• Do not append trailing decorative symbols (e.g., ###, *** or long ellipses) and avoid leaving dangling punctuation.\n• Keep the opening paragraph free of attributions. From paragraph two onward, vary verbs (limit the exact phrase "according to" to one use).\n• Emphasize concrete tennis detail (patterns, surfaces, adjustments) while weaving in emotion, crowd energy, and context.`,
       `Reference handling:\n• Mention each subject once with its provided wording, then prefer pronouns or descriptors.\n• Integrate links naturally within sentences; no trailing "Source" blocks or link lists.\n• Never repeat the same full name back-to-back or create doubled wording.`,
       `Link formatting: never output bare URLs, markdown links, or parentheses containing URLs. Write the subject text only; downstream formatting attaches the href.`,
       `Media handling:\n${mediaRequirement}`,
-      'Narrative voice: write with the cadence of a seasoned tennis analyst on site—blend tactile imagery (light, sound, tempo) with strategic insight, and close sections with forward-looking beats rather than summaries.',
+      'Narrative voice: write with the cadence of a seasoned tennis analyst on site—blend nuanced, non-interfering tactile imagery (light, sound, tempo) with strategic insight, and close sections with forward-looking beats rather than summaries.',
       `Language hygiene:\n• Remove emojis/hashtags.\n• Prefer "slice"/"underspin", "inside-in"/"inside-out", "down-the-line", "crosscourt", and "1–2"/"one–two" combinations.\n• Keep paragraphs concise (2–4 sentences) and never use ALL CAPS.`,
       linkRequirement,
-  'HTML hygiene: output valid HTML5 fragment with balanced tags, no Markdown fences, no self-invented wrapper elements for plain text, and never leave dangling <div> or </p> markers or decorative trailing punctuation like ###.',
+      'HTML hygiene: output valid HTML5 fragment with balanced tags, no Markdown fences, no self-invented wrapper elements for plain text, and never leave dangling <div> or </p> markers or decorative trailing punctuation like ###.',
       strategy === 'variant'
         ? 'Distinctiveness: diverge from other drafts by highlighting different match context, stats, or tactical takeaways while remaining factual.'
         : undefined,

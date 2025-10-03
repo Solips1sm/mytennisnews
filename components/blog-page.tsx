@@ -8,7 +8,7 @@ import { BlogPostCard } from '@/components/blog-post-card'
 import { Pagination } from '@/components/pagination'
 import { FeaturedPostSidebarItem } from '@/components/featured-post-sidebar-item'
 import { Switch } from '@/components/ui/switch'
-import { cn, estimateReadTime, formatFriendlyDate } from '@/lib/utils'
+import { cn, estimateReadTime, estimateReadTimeFromChars, formatFriendlyDate, formatLocalDetailed } from '@/lib/utils'
 import { buttonVariants } from '@/ui/button'
 
 type Article = {
@@ -21,6 +21,7 @@ type Article = {
   source?: { name?: string; url?: string }
   tags?: Array<{ _id: string; name: string }>
   publishedAt?: string
+  readingChars?: number
 }
 
 type BlogPageProps = {
@@ -282,9 +283,19 @@ export function BlogPage({
               <h2 className="text-2xl leading-tight font-bold md:text-3xl">
                 {hero?.title || 'Featured'}
               </h2>
-              <div className="mt-1 flex items-center gap-3 text-sm text-white/80">
+              <div className="group/meta mt-1 flex items-center gap-3 text-sm text-white/80">
                 {hero?.publishedAt ? (
-                  <time dateTime={hero.publishedAt}>{formatFriendlyDate(hero.publishedAt)}</time>
+                  <span className="relative inline-block align-baseline">
+                    <span className="block opacity-100 filter blur-0 transition-all duration-[600ms] group-hover/meta:opacity-0 group-hover/meta:blur-[2px]">
+                      {formatFriendlyDate(hero.publishedAt)}
+                    </span>
+                    <span
+                      className="pointer-events-none absolute inset-0 flex items-center opacity-0 filter blur-[2px] transition-all duration-[600ms] group-hover/meta:opacity-100 group-hover/meta:blur-0 whitespace-nowrap"
+                      title={new Date(hero.publishedAt).toString()}
+                    >
+                      {formatLocalDetailed(hero.publishedAt)}
+                    </span>
+                  </span>
                 ) : null}
                 <span className="ml-auto hidden items-center gap-1 text-white transition-opacity duration-200 group-hover:inline-flex">
                   <span className="hidden sm:inline">Click to read more</span>
@@ -409,7 +420,7 @@ export function BlogPage({
                   description={a.excerpt || ''}
                   authorName={a.source?.name || 'Source'}
                   authorAvatarSrc="/placeholder.svg?height=24&width=24"
-                  readTime={estimateReadTime(a.excerpt || a.title)}
+                  readTime={a.readingChars != null ? estimateReadTimeFromChars(a.readingChars) : estimateReadTime(a.excerpt || a.title)}
                   publishedAt={a.publishedAt}
                 />
               </div>

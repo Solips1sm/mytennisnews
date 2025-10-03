@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react'
 import Image from 'next/image'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { resolveSourceLogo } from '@/lib/logo-resolver'
-import { formatFriendlyDate } from '@/lib/utils'
+import { formatFriendlyDate, formatLocalDetailed } from '@/lib/utils'
 
 interface BlogPostCardProps {
   imageSrc: string
@@ -61,7 +61,7 @@ export function BlogPostCard({ imageSrc, imageAlt, title, description, authorNam
       <div className="relative flex flex-1 flex-col gap-2 p-4">
         <h3 className="font-ui text-lg font-semibold leading-tight">{title}</h3>
         <p className="font-ui text-sm text-muted-foreground line-clamp-3">{description}</p>
-        <div className="mt-auto flex items-center gap-1 text-sm text-muted-foreground">
+  <div className="group/meta mt-auto flex items-center gap-1 text-sm text-muted-foreground">
           <Avatar className="h-6 w-6">
             {logo ? (
               <AvatarImage src={logo.src} alt={logo.alt} className={logo.className} />
@@ -71,11 +71,33 @@ export function BlogPostCard({ imageSrc, imageAlt, title, description, authorNam
           </Avatar>
           <span>{authorName}</span>
           <span>•</span>
-          <span>{readTime} read</span>
-          {publishedAt ? (<>
-            <span>•</span>
-            <time dateTime={publishedAt}>{formatFriendlyDate(publishedAt)}</time>
-          </>) : null}
+          {/* Default: read time; On hover: detailed local date/time with fade+blur, no layout shift */}
+          <span className="relative inline-block align-baseline">
+            <span
+              className="block opacity-100 filter blur-0 transition-all duration-[800ms] group-hover/meta:opacity-0 group-hover/meta:blur-[2px]"
+            >
+              {readTime} read
+            </span>
+            {publishedAt ? (
+              <span
+                className="pointer-events-none absolute inset-0 flex items-center opacity-0 filter blur-[2px] transition-all duration-[800ms] group-hover/meta:opacity-100 group-hover/meta:blur-0 whitespace-nowrap"
+                title={new Date(publishedAt).toString()}
+              >
+                {formatLocalDetailed(publishedAt)}
+              </span>
+            ) : null}
+          </span>
+          {publishedAt ? (
+            <>
+              <span className="transition-all duration-[800ms] group-hover/meta:opacity-0 group-hover/meta:blur-[2px]">•</span>
+              <time
+                dateTime={publishedAt}
+                className="transition-all duration-[800ms] group-hover/meta:opacity-0 group-hover/meta:blur-[2px]"
+              >
+                {formatFriendlyDate(publishedAt)}
+              </time>
+            </>
+          ) : null}
         </div>
         {/* Hover accent line under meta row, positioned within content bounds */}
         <div

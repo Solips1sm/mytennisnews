@@ -1,6 +1,6 @@
 "use client"
 import * as React from 'react'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Button } from '@/ui/button'
 import { Input } from '@/ui/input'
 
@@ -11,12 +11,31 @@ export function SubscribeForm({ size = 'sm' as 'sm' | 'default' | 'lg' }: { size
   const conversionSendTo = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_SEND_TO
   const conversionValue = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_VALUE
   const conversionCurrency = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_CURRENCY
+  const conversionOnSubmit = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ON_SUBMIT === 'true'
+  const conversionFiredRef = useRef(false)
+
+  function fireConversionOnce() {
+    if (conversionFiredRef.current) return
+    if (typeof window !== 'undefined' && typeof window.gtag === 'function' && conversionSendTo) {
+      const valueNumber = conversionValue ? Number(conversionValue) : undefined
+      window.gtag('event', 'conversion', {
+        send_to: conversionSendTo,
+        ...(valueNumber && !Number.isNaN(valueNumber) ? { value: valueNumber } : {}),
+        ...(conversionCurrency ? { currency: conversionCurrency } : {}),
+      })
+      conversionFiredRef.current = true
+    }
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setStatus('loading')
     setMessage(null)
     try {
+      if (conversionOnSubmit) {
+        // Fire conversion as soon as the user submits; skip re-firing on success
+        fireConversionOnce()
+      }
       const res = await fetch('/api/subscribe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,13 +46,9 @@ export function SubscribeForm({ size = 'sm' as 'sm' | 'default' | 'lg' }: { size
       setStatus('success')
       setMessage('Thanks! Please check your inbox (if needed).')
       setEmail('')
-      if (typeof window !== 'undefined' && typeof window.gtag === 'function' && conversionSendTo) {
-        const valueNumber = conversionValue ? Number(conversionValue) : undefined
-        window.gtag('event', 'conversion', {
-          send_to: conversionSendTo,
-          ...(valueNumber && !Number.isNaN(valueNumber) ? { value: valueNumber } : {}),
-          ...(conversionCurrency ? { currency: conversionCurrency } : {}),
-        })
+      if (!conversionOnSubmit) {
+        // Default: fire conversion only after successful subscribe
+        fireConversionOnce()
       }
     } catch (err: any) {
       setStatus('error')
