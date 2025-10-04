@@ -45,8 +45,8 @@ export function HeroSubscribe() {
       ref={sectionRef}
       className={[
         'hero-subscribe relative isolate overflow-hidden rounded-xl border bg-background',
-        closing ? 'opacity-0 [filter:blur(6px)] pointer-events-none' : 'opacity-100 [filter:blur(0px)]',
-  closing ? '' : 'min-h-[16svh] md:min-h-[16svh]',
+        closing ? 'opacity-0 [filter:blur(6px)] pointer-events-none' : 'opacity-100',
+        closing ? '' : 'min-h-[16svh] md:min-h-[16svh]',
         'transition-[height,opacity,filter,margin-bottom] duration-300 ease-out will-change-[height,opacity,filter]',
         closing ? '-mb-8' : 'mb-6 md:mb-8'
       ].join(' ')}
@@ -54,15 +54,15 @@ export function HeroSubscribe() {
     >
       {/* Background overlays: softened for mobile, original for sm+ */}
       <div
-        className="absolute inset-0 block sm:hidden"
+        className="absolute inset-0 z-0 pointer-events-none block sm:hidden"
         style={{
           background:
-            'radial-gradient(circle at 50% -10%, rgba(99,0,237,0.35) 0%, rgba(13,13,13,0.85) 55%), linear-gradient(to bottom, rgba(13,13,13,0.85), rgba(13,13,13,1))',
+            'radial-gradient(120% 70% at 50% -30%, rgba(99,0,237,0.22) 0%, rgba(13,13,13,0.78) 58%), linear-gradient(to bottom, rgba(13,13,13,0.86), rgba(13,13,13,1))',
         }}
         aria-hidden="true"
       />
       <div
-        className="absolute inset-0 hidden sm:block"
+        className="absolute inset-0 z-0 pointer-events-none hidden sm:block"
         style={{
           background:
             'radial-gradient(circle at 50% -20%, rgba(99,0,237,0.6) 0%, rgba(13,13,13,0.93) 50%, rgba(13,13,13,1) 70%)',
@@ -80,7 +80,7 @@ export function HeroSubscribe() {
         </button>
       </div>
 
-      <div className="hero-subscribe__inner relative z-10 mx-auto flex max-w-5xl flex-col items-center px-5 py-6 sm:py-8 text-center text-white">
+  <div className="hero-subscribe__inner relative z-10 mx-auto flex max-w-5xl flex-col items-center px-5 py-6 sm:py-8 text-center text-white will-change-transform [transform:translateZ(0)]">
         <p className="hero-kicker text-[11px] uppercase tracking-wider text-white/75">MyTennisNews Weekly</p>
         <h1 className="hero-title mt-1.5 text-[20px] leading-tight font-bold sm:text-[24px]">The smartest tennis brief in your inbox</h1>
         <p className="hero-lede mt-1.5 max-w-xl text-[13px] sm:text-sm leading-snug text-white/85">
