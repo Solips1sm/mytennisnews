@@ -44,80 +44,75 @@ export function HeroSubscribe() {
     <section
       ref={sectionRef}
       className={[
-        'hero-subscribe relative isolate overflow-hidden rounded-xl border bg-background',
-        closing ? 'opacity-0 [filter:blur(6px)] pointer-events-none' : 'opacity-100',
-        closing ? '' : 'min-h-[16svh] md:min-h-[16svh]',
-        'transition-[height,opacity,filter,margin-bottom] duration-300 ease-out will-change-[height,opacity,filter]',
-        closing ? '-mb-8' : 'mb-6 md:mb-8'
+        'hero-sub relative isolate overflow-hidden rounded-xl border bg-background mb-6',
+        closing ? 'opacity-0 [filter:blur(6px)] pointer-events-none -mb-8' : 'opacity-100',
+        closing ? '' : 'min-h-[20svh] md:min-h-[25svh]',
+        'transition-[height,opacity,filter,margin-bottom] duration-300 ease-out will-change-[height,opacity,filter]'
       ].join(' ')}
       style={inlineHeight !== null ? { height: inlineHeight } : undefined}
     >
-      {/* Background overlays: softened for mobile, original for sm+ */}
+      <div className="pointer-events-none absolute inset-0" aria-hidden="true" />
       <div
-        className="absolute inset-0 z-0 pointer-events-none block sm:hidden"
-        style={{
-          background:
-            'radial-gradient(120% 70% at 50% -30%, rgba(99,0,237,0.22) 0%, rgba(13,13,13,0.78) 58%), linear-gradient(to bottom, rgba(13,13,13,0.86), rgba(13,13,13,1))',
-        }}
-        aria-hidden="true"
-      />
-      <div
-        className="absolute inset-0 z-0 pointer-events-none hidden sm:block"
+        className="absolute inset-0"
         style={{
           background:
             'radial-gradient(circle at 50% -20%, rgba(99,0,237,0.6) 0%, rgba(13,13,13,0.93) 50%, rgba(13,13,13,1) 70%)',
         }}
         aria-hidden="true"
       />
-      <div className="absolute right-2 top-2 sm:right-4 sm:top-4 z-20">
+      <div className="hero-close-wrap absolute right-4 top-4 z-20">
         <button
           type="button"
           aria-label="Hide newsletter banner"
           onClick={onClose}
-          className="hero-close h-7 w-20 text-xs sm:h-8 sm:w-24 sm:text-sm rounded-full border border-white/20 px-2 font-extralight text-white/90 backdrop-blur transition hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+          className="hero-close-btn h-8 w-24 rounded-full border border-white/20 px-2 text-sm font-extralight text-white/90 backdrop-blur transition hover:bg-white/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
         >
           Hide
         </button>
       </div>
 
-  <div className="hero-subscribe__inner relative z-10 mx-auto flex max-w-5xl flex-col items-center px-5 py-6 sm:py-8 text-center text-white will-change-transform [transform:translateZ(0)]">
-        <p className="hero-kicker text-[11px] uppercase tracking-wider text-white/75">MyTennisNews Weekly</p>
-        <h1 className="hero-title mt-1.5 text-[20px] leading-tight font-bold sm:text-[24px]">The smartest tennis brief in your inbox</h1>
-        <p className="hero-lede mt-1.5 max-w-xl text-[13px] sm:text-sm leading-snug text-white/85">
+      <div className="hero-content relative z-10 mx-auto flex max-w-5xl flex-col items-center px-6 py-12 text-center text-white">
+        <p className="hero-kicker text-xs uppercase tracking-wider text-white/75">MyTennisNews Weekly</p>
+        <h1 className="hero-title mt-2 text-2xl font-bold sm:text-3xl">The smartest tennis brief in your inbox</h1>
+        <p className="hero-lede mt-2 max-w-xl text-sm text-white/85">
           Curated pro tour headlines, storylines that matter, and must‑read links — in one quick email. No noise. No spam.
         </p>
-        <div className="mt-4 w-full max-w-md">
+        <div className="hero-form mt-5 w-full max-w-md">
           <SubscribeFormInline />
         </div>
       </div>
-      <style
-        dangerouslySetInnerHTML={{
-          __html: `
-          /* Further tighten when in portrait or very short viewports */
-          @media (orientation: portrait) {
-            .hero-subscribe{ min-height:12svh; }
+
+      <style dangerouslySetInnerHTML={{
+        __html: `
+          /* Mobile compact: max 33vh */
+          @media (max-width: 640px) {
+            .hero-sub { min-height: clamp(26vh, 28vh, 28vh) !important; max-height: 28vh; }
+            .hero-content { padding: 1rem 1.25rem !important; }
+            .hero-kicker { font-size: 10px; }
+            .hero-title { margin-top: 0.375rem; font-size: 1.125rem; line-height: 1.2; }
+            .hero-lede { margin-top: 0.375rem; font-size: 0.75rem; line-height: 1.3; }
+            .hero-form { margin-top: 0.875rem; }
+            .hero-close-wrap { right: 0.5rem; top: 0.5rem; }
+            .hero-close-btn { height: 1.75rem; width: 4.5rem; font-size: 0.75rem; padding: 0 0.5rem; }
           }
-          @media (orientation: portrait) and (max-height: 740px) {
-            .hero-subscribe__inner{ padding-top:14px; padding-bottom:14px; }
-            .hero-kicker{ font-size:10px; }
-            .hero-title{ font-size:18px; line-height:1.15; margin-top:6px; }
-            .hero-lede{ font-size:12px; line-height:1.25; margin-top:6px; }
-            .hero-close{ height:28px; width:76px; font-size:12px; }
-            /* keep close outside text bounds and away from notches */
-            .hero-subscribe > .absolute{ right: max(8px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top)); z-index: 40; }
+          /* Portrait phones: further compress */
+          @media (max-width: 640px) and (orientation: portrait) and (max-height: 740px) {
+            .hero-sub { min-height: 28vh !important; max-height: 30vh; }
+            .hero-content { padding: 0.75rem 1rem !important; }
+            .hero-kicker { font-size: 9px; }
+            .hero-title { font-size: 1rem; margin-top: 0.25rem; }
+            .hero-lede { font-size: 0.7rem; margin-top: 0.25rem; }
+            .hero-form { margin-top: 0.75rem; }
           }
-          @media (max-height: 640px) and (orientation: portrait) {
-            .hero-subscribe{ min-height:10svh; }
-            /* Hide lede on very constrained vertical space */
-            .hero-lede{ display:none; }
-            .hero-title{ margin-top:4px; }
-            .hero-subscribe__inner{ padding-top:12px; padding-bottom:12px; }
+          /* Very short portrait: hide lede */
+          @media (max-width: 640px) and (orientation: portrait) and (max-height: 640px) {
+            .hero-sub { min-height: 22vh !important; max-height: 26vh; }
+            .hero-lede { display: none; }
+            .hero-title { margin-top: 0.25rem; }
+            .hero-form { margin-top: 0.625rem; }
           }
-        `,
-        }}
-      />
+        `
+      }} />
     </section>
   )
 }
-
-// Note: Inline form imported statically to avoid hydration timing differences and layout snaps
